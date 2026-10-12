@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#182d35">
+  <meta name="description" content="Access Lab is an independent local portfolio prototype for explainable team access and sample billing.">
+  <title>Access Lab · Team access, made clear</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Workspace navigation">
+      <a class="brand" href="/" aria-label="Access Lab home"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M7 24V14a5 5 0 0 1 10 0v10M5 24h14M17 18h5a5 5 0 0 0 0-10h-3"/></svg></span><span>access<span class="brand-light">lab</span><span class="brand-dot">.</span></span></a>
+      <div class="org-switch"><span class="org-monogram" id="org-monogram">NS</span><div><strong id="sidebar-org">Northstar Studio</strong><span>Team workspace</span></div><span class="subtle-chevron" aria-hidden="true">⌄</span></div>
+      <p class="nav-label">WORKSPACE</p>
+      <nav id="navigation" class="nav-links"></nav>
+      <div class="sidebar-bottom">
+        <div class="sidebar-note"><span class="tiny-orbit" aria-hidden="true"></span><strong>Clear access. Confident teams.</strong><p>The right next step, for everyone.</p></div>
+        <div class="sidebar-rule"></div>
+        <button class="demo-open sidebar-demo" data-action="demo"><span id="demo-button-icon" aria-hidden="true"></span><span>Demo controls & evidence</span><span class="key-hint">↗</span></button>
+        <p class="independent">Independent portfolio prototype<br>Not affiliated with GitKraken</p>
+      </div>
+    </aside>
+    <div class="workspace-shell">
+      <header class="topbar">
+        <div class="breadcrumbs"><span id="breadcrumb-org">Northstar Studio</span><span class="breadcrumb-slash">/</span><strong id="breadcrumb-view">My workspace</strong></div>
+        <div class="topbar-actions"><span class="local-label"><span></span>Local demo</span><button class="icon-button" data-action="refresh" aria-label="Refresh workspace" title="Refresh workspace" id="refresh-button"></button><button class="icon-button notifications-top" data-action="nav" data-view="notifications" aria-label="View notifications" title="View notifications" id="notifications-button"></button><span class="avatar small" id="top-avatar" aria-label="Selected demo identity">MC</span></div>
+      </header>
+      <div class="demo-strip"><span><strong>Portfolio demo</strong><span class="strip-divider">·</span>Fictional team, sample pricing, simulated payments</span><button data-action="demo">Viewing as <strong id="persona-label">Maya · developer</strong><span aria-hidden="true">⌄</span></button></div>
+      <main id="main-content" tabindex="-1"><div class="loading-panel"><span class="loading-dot"></span>Loading your workspace…</div></main>
+      <footer class="workspace-footer"><span>Access Lab <span class="footer-dot">·</span> Team access, made clear</span><button data-action="demo">About this prototype <span aria-hidden="true">↗</span></button></footer>
+    </div>
+  </div>
+  <div id="announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="review-dialog" class="review-dialog" aria-labelledby="review-title"><div id="review-content"></div></dialog>
+  <dialog id="demo-dialog" class="demo-dialog" aria-labelledby="demo-title">
+    <div class="dialog-heading"><div><p class="eyebrow">REVIEWER TOOLS</p><h2 id="demo-title">Explore the whole story.</h2></div><button class="icon-button" data-action="close-demo" aria-label="Close demo controls">×</button></div>
+    <p class="dialog-intro">These controls change fictitious local data. Choosing a persona is a demo tool, not a sign-in system.</p>
+    <div class="demo-section"><h3>1. Choose a perspective</h3><label for="persona-select">Demo identity</label><select id="persona-select"></select><p class="field-help">Maya requests access. Eli reviews the cost and approves. Juniper identities demonstrate a separate organization.</p></div>
+    <div class="demo-section"><h3>2. Set a payment outcome</h3><label for="payment-select">Simulated payment result</label><select id="payment-select"><option value="success">Success — a sample payment completes</option><option value="failure">Failure — the request stays open</option></select><p class="field-help">Applies to new purchase attempts until changed. Assigning an available seat requires no payment.</p></div>
+    <div class="demo-section scenario-controls"><div><h3>3. Restart a scenario</h3><p class="field-help">Resets all sample requests, payments, notifications, and activity in this local demo. Resets payment outcome to success.</p></div><label for="scenario-select">Starting scenario</label><select id="scenario-select"><option value="full">Five seats, all occupied</option><option value="spare">One available paid seat</option></select><label class="check-label"><input type="checkbox" id="reset-confirm">I understand this clears the sample demo data.</label><button class="button secondary" id="reset-button" data-action="reset" disabled>Reset sample data</button></div>
+    <div class="demo-section walkthrough"><h3>A two-minute walkthrough</h3><ol><li><strong>Be Maya.</strong> Explain the access blocker, then request a seat.</li><li><strong>Switch to Eli.</strong> Review $6 now and $72 next period. Approve the simulated payment.</li><li><strong>Return to Maya.</strong> Open the shared workspace and see the confirmation.</li><li><strong>Explore recovery.</strong> Reset, choose payment failure, and try again. Switch the outcome to success before retrying.</li></ol></div>
+    <div class="demo-section evidence-section"><h3>Check the reasoning</h3><p class="field-help">Source facts, demo policies, decisions, and verification are kept separate. No usability or business outcomes have been measured.</p><div class="evidence-links"><a href="/docs/brief.md" target="_blank" rel="noopener">Scope & acceptance criteria ↗</a><a href="/docs/evidence.md" target="_blank" rel="noopener">Sources & assumptions ↗</a><a href="/docs/decisions.md" target="_blank" rel="noopener">Decision log ↗</a><a href="/docs/supervision.md" target="_blank" rel="noopener">Builder supervision ↗</a><a href="/docs/verification.md" target="_blank" rel="noopener">Independent verification ↗</a></div><p class="field-help evidence-limit">Independent concept. No GitKraken connection, real charges, external notifications, or production authentication.</p></div>
+  </dialog>
+</body>
+</html>

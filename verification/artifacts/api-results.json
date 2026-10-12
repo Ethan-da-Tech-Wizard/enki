@@ -1,0 +1,78 @@
+{
+  "checkedAt": "2026-10-01T15:41:13.150087+00:00",
+  "python": "3.14.7",
+  "checks": [
+    {
+      "name": "Initial access is blocked and unknown/missing demo identities are rejected",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Duplicate requests are deduplicated; role and organization boundaries hold",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Quote is $6 now/$72 next period and client-supplied prices/identity are rejected",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Failed payment persists without granting access; replay is stable and stale quote is rejected",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Deliberate retry grants real server-gated demo access; successful replay changes nothing",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Marking developer notifications read leaves administrator notifications unchanged",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Requests, seats, transactions, notifications, and access survive a server process restart",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Eight concurrent same-key approvals create one purchase and one access grant",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Eight concurrent different-key approvals create one purchase and one access grant",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Spare-seat approval grants access without a payment attempt even with failure simulation selected",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Reset invalidates pre-reset cost previews even when request IDs are reused",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Decline is replay-safe, grants no access, and allows a new request",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Malformed inputs, unconfirmed resets, and cross-origin mutations receive explicit errors",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Public binding is rejected",
+      "passed": true,
+      "detail": null
+    }
+  ],
+  "passed": true,
+  "failure": null
+}

@@ -1,0 +1,436 @@
+{
+  "checkedAt": "2026-10-01T15:49:00.020Z",
+  "url": "http://127.0.0.1:8765",
+  "browser": "153.0.8010.52",
+  "checks": [
+    {
+      "name": "Desktop explains the blocker; primary controls are keyboard reachable",
+      "passed": true
+    },
+    {
+      "name": "Browser request is persisted and repeated request is deduplicated",
+      "passed": true
+    },
+    {
+      "name": "Failed payment is recoverable and creates no successful charge or access",
+      "passed": true
+    },
+    {
+      "name": "Deliberate retry succeeds and developer opens server-gated workspace",
+      "passed": true
+    },
+    {
+      "name": "Developer sees confirmation and can mark only own notifications as read",
+      "passed": true
+    },
+    {
+      "name": "Existing paid seat is assigned for zero additional cost",
+      "passed": true
+    },
+    {
+      "name": "Complete 390px mobile journey works without horizontal page overflow",
+      "passed": true
+    },
+    {
+      "name": "Evidence and decision links open real project documents",
+      "passed": true
+    },
+    {
+      "name": "Selected essential text is at least 12px with measured contrast of at least 4.5:1",
+      "passed": true
+    },
+    {
+      "name": "Interrupted request restores the actionable button and can be retried",
+      "passed": true
+    },
+    {
+      "name": "Lost approval response retries the same key and creates no second purchase",
+      "passed": true
+    },
+    {
+      "name": "No unexpected browser errors; two deliberately injected connection resets were handled",
+      "passed": true
+    }
+  ],
+  "contrastChecks": [
+    {
+      "label": "desktop explanatory copy",
+      "measurements": [
+        {
+          "text": "Welcome, Maya. Here’s what you need to join your team’s shared workspace.",
+          "fontSize": 13,
+          "ratio": 5.706569967909402,
+          "foreground": "rgb(83, 101, 95)",
+          "background": [
+            246,
+            246,
+            241
+          ]
+        },
+        {
+          "text": "of 5 assigned",
+          "fontSize": 13,
+          "ratio": 6.221276903664679,
+          "foreground": "rgb(83, 102, 77)",
+          "background": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "text": "An admin can add another seat",
+          "fontSize": 13,
+          "ratio": 6.221276903664679,
+          "foreground": "rgb(83, 102, 77)",
+          "background": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "text": "/ month",
+          "fontSize": 13,
+          "ratio": 6.221276903664679,
+          "foreground": "rgb(83, 102, 77)",
+          "background": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "text": "5 × $12 per seat · sample pricing",
+          "fontSize": 13,
+          "ratio": 6.221276903664679,
+          "foreground": "rgb(83, 102, 77)",
+          "background": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "text": "You’re invited to the team, but need a seat for the shared review workspace. Your administ",
+          "fontSize": 13,
+          "ratio": 5.025920229334385,
+          "foreground": "rgb(141, 94, 24)",
+          "background": [
+            250,
+            242,
+            223
+          ]
+        },
+        {
+          "text": "You’re connected to Northstar Studio.",
+          "fontSize": 13,
+          "ratio": 6.186447495830422,
+          "foreground": "rgb(83, 101, 95)",
+          "background": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "text": "Your administrator reviews the request and confirms any cost.",
+          "fontSize": 13,
+          "ratio": 6.186447495830422,
+          "foreground": "rgb(83, 101, 95)",
+          "background": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "text": "Your access is ready as soon as a seat is assigned.",
+          "fontSize": 13,
+          "ratio": 6.221276903664679,
+          "foreground": "rgb(83, 102, 77)",
+          "background": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "text": "Your administrator sees the seat cost before approving. Sending a request does not trigger",
+          "fontSize": 13,
+          "ratio": 5.738697687878091,
+          "foreground": "rgb(83, 102, 77)",
+          "background": [
+            246,
+            246,
+            241
+          ]
+        }
+      ]
+    },
+    {
+      "label": "cost explanation",
+      "measurements": [
+        {
+          "text": "Approve this request to add a seat and connect your teammate.",
+          "fontSize": 13,
+          "ratio": 6.221276903664679,
+          "foreground": "rgb(83, 102, 77)",
+          "background": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "text": "Shared review workspace · Northstar Studio",
+          "fontSize": 13,
+          "ratio": 6.221276903664679,
+          "foreground": "rgb(83, 102, 77)",
+          "background": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "text": "1 new seat · partial billing period",
+          "fontSize": 13,
+          "ratio": 5.811176685908232,
+          "foreground": "rgb(83, 102, 77)",
+          "background": [
+            246,
+            248,
+            241
+          ]
+        },
+        {
+          "text": "$12.00 × 15 / 30 days × 1 new seat = $6.00",
+          "fontSize": 13,
+          "ratio": 5.467513396675304,
+          "foreground": "rgb(83, 102, 77)",
+          "background": [
+            237,
+            242,
+            231
+          ]
+        },
+        {
+          "text": "6 seats × $12.00 / month",
+          "fontSize": 13,
+          "ratio": 5.811176685908232,
+          "foreground": "rgb(83, 102, 77)",
+          "background": [
+            246,
+            248,
+            241
+          ]
+        },
+        {
+          "text": "Sample pricing and fixed demo billing period. Payment is simulated. No real money will be ",
+          "fontSize": 13,
+          "ratio": 6.221276903664679,
+          "foreground": "rgb(83, 102, 77)",
+          "background": [
+            255,
+            255,
+            255
+          ]
+        }
+      ]
+    },
+    {
+      "label": "mobile explanatory copy",
+      "measurements": [
+        {
+          "text": "Welcome, Maya. Here’s what you need to join your team’s shared workspace.",
+          "fontSize": 13,
+          "ratio": 5.706569967909402,
+          "foreground": "rgb(83, 101, 95)",
+          "background": [
+            246,
+            246,
+            241
+          ]
+        },
+        {
+          "text": "of 5 assigned",
+          "fontSize": 13,
+          "ratio": 6.221276903664679,
+          "foreground": "rgb(83, 102, 77)",
+          "background": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "text": "An admin can add another seat",
+          "fontSize": 13,
+          "ratio": 6.221276903664679,
+          "foreground": "rgb(83, 102, 77)",
+          "background": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "text": "/ month",
+          "fontSize": 13,
+          "ratio": 6.221276903664679,
+          "foreground": "rgb(83, 102, 77)",
+          "background": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "text": "5 × $12 per seat · sample pricing",
+          "fontSize": 13,
+          "ratio": 6.221276903664679,
+          "foreground": "rgb(83, 102, 77)",
+          "background": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "text": "You’re invited to the team, but need a seat for the shared review workspace. Your administ",
+          "fontSize": 13,
+          "ratio": 5.025920229334385,
+          "foreground": "rgb(141, 94, 24)",
+          "background": [
+            250,
+            242,
+            223
+          ]
+        },
+        {
+          "text": "You’re connected to Northstar Studio.",
+          "fontSize": 13,
+          "ratio": 6.186447495830422,
+          "foreground": "rgb(83, 101, 95)",
+          "background": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "text": "Your administrator reviews the request and confirms any cost.",
+          "fontSize": 13,
+          "ratio": 6.186447495830422,
+          "foreground": "rgb(83, 101, 95)",
+          "background": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "text": "Your access is ready as soon as a seat is assigned.",
+          "fontSize": 13,
+          "ratio": 6.221276903664679,
+          "foreground": "rgb(83, 102, 77)",
+          "background": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "text": "Your administrator sees the seat cost before approving. Sending a request does not trigger",
+          "fontSize": 13,
+          "ratio": 5.738697687878091,
+          "foreground": "rgb(83, 102, 77)",
+          "background": [
+            246,
+            246,
+            241
+          ]
+        }
+      ]
+    },
+    {
+      "label": "mobile cost explanation",
+      "measurements": [
+        {
+          "text": "Approve this request to add a seat and connect your teammate.",
+          "fontSize": 13,
+          "ratio": 6.221276903664679,
+          "foreground": "rgb(83, 102, 77)",
+          "background": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "text": "Shared review workspace · Northstar Studio",
+          "fontSize": 13,
+          "ratio": 6.221276903664679,
+          "foreground": "rgb(83, 102, 77)",
+          "background": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "text": "1 new seat · partial billing period",
+          "fontSize": 13,
+          "ratio": 5.811176685908232,
+          "foreground": "rgb(83, 102, 77)",
+          "background": [
+            246,
+            248,
+            241
+          ]
+        },
+        {
+          "text": "$12.00 × 15 / 30 days × 1 new seat = $6.00",
+          "fontSize": 13,
+          "ratio": 5.467513396675304,
+          "foreground": "rgb(83, 102, 77)",
+          "background": [
+            237,
+            242,
+            231
+          ]
+        },
+        {
+          "text": "6 seats × $12.00 / month",
+          "fontSize": 13,
+          "ratio": 5.811176685908232,
+          "foreground": "rgb(83, 102, 77)",
+          "background": [
+            246,
+            248,
+            241
+          ]
+        },
+        {
+          "text": "Sample pricing and fixed demo billing period. Payment is simulated. No real money will be ",
+          "fontSize": 13,
+          "ratio": 6.221276903664679,
+          "foreground": "rgb(83, 102, 77)",
+          "background": [
+            255,
+            255,
+            255
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [
+    "Failed to load resource: net::ERR_CONNECTION_RESET",
+    "Failed to load resource: net::ERR_CONNECTION_RESET"
+  ],
+  "injectedNetworkFailures": 2,
+  "passed": true,
+  "failure": null
+}
