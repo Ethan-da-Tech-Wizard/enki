@@ -1,3 +1,12 @@
+// ==============================================================================
+// Program: app.js
+// Programmer: Ethan-da-Tech-Wizard
+// Last Modified: November 18, 2026
+// Purpose: Front-end reactive state manager and DOM controller for Access Lab.
+//          Handles actor persona switching, real-time seat cost calculations,
+//          asynchronous request submissions with idempotency protection,
+//          modal dialog workflows, and workspace status refreshes.
+// ==============================================================================
 "use strict";
 
 const $ = (selector) => document.querySelector(selector);

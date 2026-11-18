@@ -1,3 +1,10 @@
+# ==============================================================================
+# Program: verify_api.py
+# Programmer: Ethan-da-Tech-Wizard
+# Last Modified: November 18, 2026
+# Purpose: Verification script validating live API behavior against demo scenarios.
+#          Executes end-to-end user journeys and records validation hashes.
+# ==============================================================================
 """Supervisor-owned black-box checks against separate server processes."""
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone

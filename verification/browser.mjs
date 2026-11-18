@@ -1,3 +1,10 @@
+// ==============================================================================
+// Program: browser.mjs
+// Programmer: Ethan-da-Tech-Wizard
+// Last Modified: November 18, 2026
+// Purpose: Headless browser automation script executing visual regression checks
+//          and UI screenshot captures for portfolio verification.
+// ==============================================================================
 import assert from 'node:assert/strict';
 import {mkdir, writeFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';

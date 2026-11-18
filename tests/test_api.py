@@ -1,3 +1,11 @@
+# ==============================================================================
+# Program: test_api.py
+# Programmer: Ethan-da-Tech-Wizard
+# Last Modified: November 18, 2026
+# Purpose: Integration test suite for HTTP API endpoints.
+#          Tests REST contract behaviors, role authorization gates, request payloads,
+#          error code responses, and scenario reset flows.
+# ==============================================================================
 import http.client
 import json
 from pathlib import Path

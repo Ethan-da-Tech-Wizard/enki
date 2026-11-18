@@ -1,3 +1,12 @@
+# ==============================================================================
+# Program: server.py
+# Programmer: Ethan-da-Tech-Wizard
+# Last Modified: November 18, 2026
+# Purpose: Loopback HTTP API server and static asset delivery daemon.
+#          Exposes REST endpoints for team seat requests, workspace status,
+#          billing quotes, and demo scenario resets while strictly enforcing
+#          local-only interface binding and security headers.
+# ==============================================================================
 """Loopback-only HTTP interface. Run: python3 -m app.server."""
 
 from __future__ import annotations
@@ -34,6 +43,7 @@ def is_loopback(host):
         return False
 
 
+# HTTP request dispatcher mapping REST endpoints to domain store operations
 class Handler(BaseHTTPRequestHandler):
     server_version = "AccessLab/1.0"
 

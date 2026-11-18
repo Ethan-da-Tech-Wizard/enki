@@ -1,3 +1,12 @@
+# ==============================================================================
+# Program: domain.py
+# Programmer: Ethan-da-Tech-Wizard
+# Last Modified: November 18, 2026
+# Purpose: Core domain model, persistence layer, and business policy logic.
+#          Manages SQLite schema initialization, deterministic demo seeds,
+#          seat allocation transitions, proration calculations, idempotency checks,
+#          and role-based permission assertions across team workspaces.
+# ==============================================================================
 """Deterministic demo policy and persistent business transitions.
 
 All prices, identities, and billing rules here are invented sample policy.
@@ -95,6 +104,7 @@ CREATE TABLE IF NOT EXISTS attempts (
 """
 
 
+# Central database access and transaction manager
 class Store:
     def __init__(self, path):
         self.path = str(Path(path).resolve())

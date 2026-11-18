@@ -1,3 +1,11 @@
+# ==============================================================================
+# Program: test_domain.py
+# Programmer: Ethan-da-Tech-Wizard
+# Last Modified: November 18, 2026
+# Purpose: Unit test suite for domain business rules and SQLite transactions.
+#          Verifies seat reservation math, proration accuracy, concurrent idempotency,
+#          role permissions, and database state transitions.
+# ==============================================================================
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import tempfile
