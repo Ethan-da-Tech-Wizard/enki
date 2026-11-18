@@ -1,10 +1,17 @@
+// Program: Access Lab - app.js
+// Programmer: Ethan-da-Tech-Wizard (written with Claude, an AI assistant)
+// Last Modified: 2026-11-18
+// Purpose: Browser-side single-page UI: calls the local API as the chosen demo identity and renders workspace, review, activity, notification, and demo-control views.
 "use strict";
 
+// --- Small helpers ---
+// $ finds one element; h escapes text for safe HTML; money, initials, and dateLabel format values.
 const $ = (selector) => document.querySelector(selector);
 const h = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
 const money = (cents) => new Intl.NumberFormat("en-US", {style:"currency",currency:"USD"}).format(cents / 100);
 const initials = (name) => name.split(" ").map((part) => part[0]).slice(0, 2).join("");
 const dateLabel = (date) => new Date(date).toLocaleString(undefined, {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+// --- Icons: SVG path data keyed by name ---
 const paths = {
   home:'<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/>',
   team:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m20 0v-2a4 4 0 0 0-3-3.9M15 3.2a4 4 0 0 1 0 7.6"/><circle cx="9" cy="7" r="4"/>',
@@ -26,12 +33,20 @@ const paths = {
   alert:'<path d="M10.3 4.6a2 2 0 0 1 3.4 0l8 13.9a2 2 0 0 1-1.7 3H4a2 2 0 0 1-1.7-3Z"/><path d="M12 9v4m0 4v.1"/>',
   inbox:'<path d="M4 4h16l2 11v5H2v-5Zm-2 11h6l2 3h4l2-3h6"/>',
 };
+// Build an inline SVG icon (falls back to the info icon for unknown names).
 const icon = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.info}</svg>`;
+// --- Application state ---
+// The selected demo identity is remembered for this browser tab when storage is available.
 let storedActor = "maya";
 try { storedActor = sessionStorage.getItem("access-lab-persona") || "maya"; } catch (_) { /* A private tab may deny storage. */ }
+// Single state object: current identity, view, loaded data, open review, busy flag, and a counter that discards out-of-date refreshes.
 const state = { actorId:storedActor, view:"workspace", workspace:null, demo:null, review:null, sample:null, busy:false, refreshId:0 };
 let toastTimer;
 
+/**
+ * Call the local API as the given identity (GET without a body, POST with one).
+ * Returns parsed JSON; throws an Error with `code` and `status` set when the call fails.
+ */
 async function api(path, body, actorId = state.actorId) {
   let response;
   try {
@@ -52,7 +67,14 @@ async function api(path, body, actorId = state.actorId) {
   return data;
 }
 
+// --- Notifications to the user ---
+/**
+ * Speak a message to screen readers through the live region.
+ */
 function announce(message) { $("#announcer").textContent = message; }
+/**
+ * Show a temporary message; errors stay visible longer.
+ */
 function toast(message, error = false) {
   clearTimeout(toastTimer);
   const target = $("#toast");
@@ -61,9 +83,19 @@ function toast(message, error = false) {
   target.hidden = false;
   toastTimer = setTimeout(() => { target.hidden = true; }, error ? 12000 : 7500);
 }
+/**
+ * Remember the chosen identity for this tab, ignoring storage errors.
+ */
 function savePersona() { try { sessionStorage.setItem("access-lab-persona", state.actorId); } catch (_) {} }
+/**
+ * Close the review dialog and forget the open review.
+ */
 function closeReview() { $("#review-dialog").close(); state.review = null; }
 
+/**
+ * Reload the workspace and demo info, then redraw. Results from superseded requests are ignored;
+ * `quiet` keeps the current screen if a background reload fails.
+ */
 async function refresh({quiet = false} = {}) {
   const refreshId = ++state.refreshId;
   const actorId = state.actorId;
@@ -83,16 +115,29 @@ async function refresh({quiet = false} = {}) {
   }
 }
 
+// --- View builders: each returns an HTML string ---
+/**
+ * Colored label for a request status.
+ */
 function statusBadge(status) {
   const labels = {pending:"Awaiting review",payment_failed:"Payment needs attention",approved:"Access granted",denied:"Declined"};
   return `<span class="status-badge ${h(status)}">${h(labels[status] || status)}</span>`;
 }
+/**
+ * Placeholder block shown when a list has nothing to show.
+ */
 function emptyState(title, message, symbol = "inbox") {
   return `<div class="empty-state"><div class="empty-icon">${icon(symbol)}</div><h3>${h(title)}</h3><p>${h(message)}</p></div>`;
 }
+/**
+ * Page title block with an eyebrow label, subtitle, and optional tag.
+ */
 function heading(eyebrow, title, subtitle, tag = "") {
   return `<div class="page-heading"><div><p class="eyebrow">${h(eyebrow)}</p><h1>${h(title)}</h1><p class="page-subtitle">${h(subtitle)}</p></div>${tag ? `<span class="heading-tag">${h(tag)}</span>` : ""}</div>`;
 }
+/**
+ * Three summary cards: seat usage, pending requests or available seats, and next-period cost.
+ */
 function summary() {
   const {organization:org, actor, requests} = state.workspace;
   const pending = requests.filter((r) => ["pending","payment_failed"].includes(r.status)).length;
@@ -105,6 +150,9 @@ function summary() {
   </div>`;
 }
 
+/**
+ * Redraw navigation, header labels, and the main view for the current identity and selected view.
+ */
 function render() {
   const w = state.workspace;
   if (!w) return;
@@ -127,6 +175,9 @@ function render() {
   else $("#main-content").innerHTML = admin ? adminPage() : developerPage();
 }
 
+/**
+ * Developer home: status message, three-step access path, and the shared workspace preview.
+ */
 function developerPage() {
   const {actor, access, organization:org, requests} = state.workspace;
   const latest = requests[0];
@@ -157,11 +208,17 @@ function developerPage() {
     <div class="side-column"><div><section class="workspace-preview"><p class="eyebrow">WHAT’S WAITING FOR YOU</p><div class="preview-icon">${icon("layers")}</div><h2>A shared space.<br>A connected team.</h2><p>Bring reviews, feedback, and your next great idea together.</p><ul class="feature-list"><li>${icon("check")}Review changes together</li><li>${icon("check")}Keep feedback in context</li><li>${icon("check")}Move work forward as a team</li></ul><div class="preview-foot"><div class="avatar-stack" aria-hidden="true"><span>EB</span><span>AM</span><span>SR</span></div><span>${access.enabled ? "Your team seat is assigned" : "Your team is already here"}</span></div></section><div class="support-note">${icon("info")}<div><h3>No surprise purchases</h3><p>Your administrator sees the seat cost before approving. Sending a request does not trigger a payment.</p></div></div></div></div></div>`;
 }
 
+/**
+ * The opened shared review workspace shown after access is granted.
+ */
 function sampleWorkspace() {
   const sample = state.sample;
   return `<section class="unlocked-workspace" aria-label="Opened shared workspace"><div class="workspace-sample-head"><span>${h(sample.title)}</span>${icon("unlock")}</div><div class="workspace-sample-body"><h3>You’re connected to your team.</h3><p>Fictional preview · no repository connected</p><div class="sample-review">${icon("code")}<span>${h(sample.review.title)}</span><span>${h(sample.review.status)}</span></div></div></section>`;
 }
 
+/**
+ * Administrator home: open and closed requests, the team table, and an explanation of seat costs.
+ */
 function adminPage() {
   const {requests, organization:org, members} = state.workspace;
   const open = requests.filter((r) => ["pending","payment_failed"].includes(r.status));
@@ -173,17 +230,26 @@ function adminPage() {
     <div class="side-column"><section class="admin-note"><p class="eyebrow">A LITTLE CLARITY GOES A LONG WAY</p><h2>Know what changes.<br>Before you approve.</h2><p>${newSeat ? "Adding a teammate adds one seat to your plan. You only pay for the time left in this sample billing period." : "There’s room on your current plan. Assign an available paid seat with no additional charge."}</p><div class="cost-example"><div><span>${newSeat ? "One new seat today" : "Use an available seat"}</span><strong>${newSeat ? "$6.00" : "$0.00"}</strong></div><div><span>Then per seat / month</span><strong>$12.00</strong></div><small>Sample pricing · ${newSeat ? "15 of 30 days remaining" : "No new purchase needed"}</small></div><div class="support-note">${icon("shield")}<div><h3>You stay in control</h3><p>Every approval includes a current cost preview and a clear record of the outcome.</p></div></div></section>${miniActivity()}</div></div>`;
 }
 
+/**
+ * One request in the administrator's list, with actions suited to its status.
+ */
 function requestRow(r) {
   const failed = r.status === "payment_failed";
   return `<article class="request-row"><div class="request-person"><span class="avatar requester">${h(initials(r.requester_name))}</span><div><strong>${h(r.requester_name)}</strong><p class="email">${h(r.requester_email)}</p></div></div>${statusBadge(r.status)}<div class="request-actions"><p>${failed ? "No payment succeeded. The request is ready for another review." : "Needs a seat for the shared review workspace."}</p><button class="button small" data-action="review" data-id="${r.id}">${failed ? "Review & retry" : "Review request"} ${icon("arrow")}</button></div></article>`;
 }
 
+/**
+ * Short list of the latest activity events.
+ */
 function miniActivity() {
   const events = state.workspace.activity.slice(0, 3);
   if (!events.length) return "";
   return `<section class="activity-mini"><h2>Recent activity</h2>${events.map((e) => `<div class="activity-line"><span class="activity-dot"></span><p>${h(e.summary)}</p><time datetime="${h(e.created_at)}">${h(dateLabel(e.created_at))}</time></div>`).join("")}<button class="button text small" data-action="nav" data-view="activity">View all activity ${icon("arrow")}</button></section>`;
 }
 
+/**
+ * Full activity history, plus payment history for administrators.
+ */
 function activityPage() {
   const {activity, actor, payments = []} = state.workspace;
   const eventNames = {scenario_ready:"Sample workspace",access_requested:"Access request",payment_failed:"Payment needs attention",access_approved:"Access granted",access_denied:"Request declined"};
@@ -192,6 +258,9 @@ function activityPage() {
     ${actor.role === "admin" ? `<section class="panel section-gap"><div class="panel-head"><div><h2>Payment history</h2><p>Simulated payments only. No real money is charged.</p></div><span class="small-label">Sample transactions</span></div>${payments.length ? `<div class="table-wrap"><table class="team-table"><thead><tr><th scope="col">ATTEMPT</th><th scope="col">TEAMMATE</th><th scope="col">AMOUNT</th><th scope="col">OUTCOME</th></tr></thead><tbody>${payments.map((p) => `<tr><td>#${p.id}<br><small>${h(dateLabel(p.created_at))}</small></td><td>${h(p.requester_name)}</td><td>${money(p.amount_cents)}</td><td><span class="status-badge ${p.status === "succeeded" ? "approved" : "payment_failed"}">${p.status === "succeeded" ? "Simulated success" : "Failed · no charge"}</span></td></tr>`).join("")}</tbody></table></div>` : emptyState("No payment attempts yet.", "Purchases and payment failures will appear here. Assigning an available paid seat has no charge.", "card")}</section>` : ""}`;
 }
 
+/**
+ * The notifications list with a mark-all-read action.
+ */
 function notificationsPage() {
   const notifications = state.workspace.notifications;
   const unread = notifications.some((n) => !n.read_at);
@@ -199,6 +268,9 @@ function notificationsPage() {
     <section class="panel"><div class="panel-head"><div><h2>Notifications</h2><p>In-app updates for ${h(state.workspace.actor.name.split(" ")[0])}. No emails are sent.</p></div>${unread ? `<button class="button secondary small" data-action="read-notifications">Mark all as read</button>` : `<span class="small-label">All read</span>`}</div>${notifications.length ? `<div class="notification-list">${notifications.map((n) => `<article class="notification-item ${n.read_at ? "" : "unread"}"><span class="notification-mark" aria-label="${n.read_at ? "Read" : "Unread"}"></span><div><h3>${h(n.title)}</h3><p>${h(n.message)}</p><time datetime="${h(n.created_at)}">${h(dateLabel(n.created_at))}</time></div></article>`).join("")}</div>` : emptyState("You’re up to date.", "We’ll keep your access updates here when there’s something to share.", "bell")}</section>`;
 }
 
+/**
+ * Fill the demo-control dialog (persona, payment result, scenario) from current state.
+ */
 function renderDemo() {
   if (!state.demo) return;
   $("#persona-select").innerHTML = state.demo.personas.map((p) => `<option value="${h(p.id)}" ${p.id === state.actorId ? "selected" : ""}>${h(p.name)} — ${p.role === "admin" ? "administrator" : "developer"} · ${h(p.organization)}</option>`).join("");
@@ -206,6 +278,9 @@ function renderDemo() {
   $("#scenario-select").value = state.demo.scenario;
 }
 
+/**
+ * Open the review dialog for a request: show a loading state, fetch the server's cost preview, and keep a fresh attempt key for the approval.
+ */
 async function openReview(requestId, notice = "") {
   const request = state.workspace.requests.find((r) => r.id === requestId);
   if (!request) return;
@@ -224,6 +299,9 @@ async function openReview(requestId, notice = "") {
   }
 }
 
+/**
+ * Draw the review dialog from the stored request and quote.
+ */
 function renderReview({retryNetwork = false} = {}) {
   const {request:r,quote:q,notice} = state.review;
   const newSeat = q.added_seats > 0;
@@ -231,6 +309,9 @@ function renderReview({retryNetwork = false} = {}) {
     <div class="quote-box"><div class="quote-main"><div><p>${newSeat ? "Due now" : "Additional cost today"}</p><small>${newSeat ? "1 new seat · partial billing period" : "1 existing paid seat · no purchase"}</small></div><strong class="amount">${money(q.immediate_cents)}</strong></div><p class="quote-formula">${newSeat ? `${money(q.seat_price_cents)} × ${q.days_remaining} / ${q.period_days} days × 1 new seat = ${money(q.immediate_cents)}` : `Use 1 of ${q.available_seats} available paid seats. No additional payment.`}</p><div class="quote-next"><div>Next ${q.period_days}-day period<small>${q.seats_after} seats × ${money(q.seat_price_cents)} / month</small></div><strong>${money(q.next_period_cents)}</strong></div></div><div class="quote-outcome">${icon("checkCircle")}<p>${h(r.requester_name.split(" ")[0])} gets workspace access immediately after approval. Your team will have <strong>${q.assigned_after} assigned seats out of ${q.seats_after}</strong>.</p></div><p class="simulation-note">Sample pricing and fixed demo billing period. ${newSeat ? "Payment is simulated. No real money will be charged." : "No payment is needed for this assignment."}</p>${notice ? `<p class="dialog-error" role="alert">${h(notice)}</p>` : ""}<div class="dialog-actions"><button class="button text" data-action="confirm-deny">Decline this request</button><button class="button" data-action="approve">${retryNetwork ? "Retry same approval" : newSeat ? `Approve access · ${money(q.immediate_cents)}` : "Assign seat · $0.00"} ${icon("arrow")}</button></div>`;
 }
 
+/**
+ * Send the approval with the preview token and attempt key. Handles stale previews, closed requests, and unknown outcomes (the same key is reused on retry so a purchase is never repeated).
+ */
 async function approve(button) {
   if (state.busy || !state.review) return;
   state.busy = true;
@@ -260,11 +341,17 @@ async function approve(button) {
   } finally { state.busy = false; }
 }
 
+/**
+ * Show the confirmation step before declining a request.
+ */
 function confirmDeny() {
   const r = state.review.request;
   $("#review-content").innerHTML = `<div class="dialog-heading"><div><p class="eyebrow">REVIEW YOUR DECISION</p><h2 id="review-title">Decline this access request?</h2></div><button class="icon-button" data-action="close-review" aria-label="Close cost review">×</button></div><p class="dialog-intro">${h(r.requester_name)} will be notified that a seat was not assigned. They can discuss access with you or submit a new request. Your plan and charges will stay the same.</p><div class="dialog-actions"><button class="button secondary" data-action="back-review">Keep reviewing</button><button class="button danger" data-action="deny">Decline request</button></div>`;
 }
 
+/**
+ * Run an action while preventing double clicks; on error restore the button and show the message.
+ */
 async function ordinaryAction(button, work) {
   if (state.busy) return;
   state.busy = true;
@@ -279,6 +366,8 @@ async function ordinaryAction(button, work) {
   finally { state.busy = false; if (button?.isConnected) button.disabled = false; }
 }
 
+// --- Event wiring ---
+// One delegated click handler: each button names its job in data-action.
 document.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-action]");
   if (!button || button.disabled) return;
@@ -321,6 +410,7 @@ document.addEventListener("click", async (event) => {
   }
 });
 
+// Switching the demo identity reloads the workspace from that person's point of view.
 $("#persona-select").addEventListener("change", async (event) => {
   if (state.busy) return;
   state.actorId = event.target.value; state.view = "workspace"; state.sample = null; savePersona();
@@ -328,14 +418,19 @@ $("#persona-select").addEventListener("change", async (event) => {
   await refresh();
   announce(`Viewing ${state.workspace?.actor.name || "selected identity"}’s perspective.`);
 });
+// Choosing the simulated payment result is saved on the server.
 $("#payment-select").addEventListener("change", async (event) => {
   const select = event.target;
   await ordinaryAction(select, async () => { const result = await api("/api/demo/payment", {result:select.value}); state.demo.payment_result = result.payment_result; toast(`New simulated purchase attempts will ${result.payment_result === "success" ? "succeed" : "fail"}.`); });
   select.value = state.demo.payment_result;
 });
+// The reset button is enabled only while the confirmation box is checked.
 $("#reset-confirm").addEventListener("change", (event) => { $("#reset-button").disabled = !event.target.checked; });
+// Dialogs cannot be dismissed with Escape while a request is in flight.
 $("#review-dialog").addEventListener("cancel", (event) => { if (state.busy) event.preventDefault(); else state.review = null; });
 $("#demo-dialog").addEventListener("cancel", (event) => { if (state.busy) event.preventDefault(); });
+// --- Start-up ---
+// Insert icons, refresh when the window regains focus, and load the first screen.
 $("#refresh-button").innerHTML = icon("refresh");
 $("#notifications-button").innerHTML = icon("bell");
 $("#demo-button-icon").innerHTML = icon("sliders");

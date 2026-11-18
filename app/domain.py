@@ -1,9 +1,14 @@
+# Program: Access Lab - domain.py
+# Programmer: Ethan-da-Tech-Wizard (written with Claude, an AI assistant)
+# Last Modified: 2026-11-18
+# Purpose: Business rules and SQLite persistence for access requests, seat approval, simulated payments, idempotent retries, and demo reset.
 """Deterministic demo policy and persistent business transitions.
 
 All prices, identities, and billing rules here are invented sample policy.
 Permissions are evaluated against a selected demo identity, not a real login.
 """
 
+# Imports: hashing, JSON, time, SQLite, and unique ids.
 from __future__ import annotations
 
 import hashlib
@@ -15,6 +20,8 @@ import sqlite3
 import uuid
 
 
+# --- Sample billing policy (invented values) ---
+# Price per seat in cents, billing period length, and days left in the current period.
 SEAT_PRICE_CENTS = 1200
 PERIOD_DAYS = 30
 DAYS_REMAINING = 15
@@ -22,16 +29,19 @@ SCENARIOS = {"full": "Five seats, all occupied", "spare": "One available paid se
 
 
 class DomainError(Exception):
+    """An expected, user-facing failure carrying an HTTP status, a short machine code, and a readable message."""
     def __init__(self, status: int, code: str, message: str):
         super().__init__(message)
         self.status, self.code, self.message = status, code, message
 
 
 def now() -> str:
+    """Return the current UTC time as an ISO-8601 string with microseconds."""
     return datetime.now(timezone.utc).isoformat(timespec="microseconds")
 
 
 def require_fields(body, allowed, required=()):
+    """Check the request body is a JSON object that has every required field and no unsupported ones."""
     if not isinstance(body, dict):
         raise DomainError(400, "invalid_body", "Send a JSON object.")
     extra = set(body) - set(allowed)
@@ -41,10 +51,14 @@ def require_fields(body, allowed, required=()):
 
 
 def valid_key(key):
+    """Check an idempotency (attempt) key: 8 to 100 characters of letters, digits, hyphens, or underscores."""
     if not isinstance(key, str) or not 8 <= len(key) <= 100 or not all(c.isalnum() or c in "-_" for c in key):
         raise DomainError(400, "invalid_idempotency_key", "Use an 8–100 character attempt key with letters, numbers, hyphens, or underscores.")
 
 
+# --- Database schema ---
+# Tables: demo_state, organizations, users, assignments (seats), requests, payments,
+# notifications, events (audit trail), and attempts (stored results for safe retries).
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS demo_state (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS organizations (
@@ -95,11 +109,15 @@ CREATE TABLE IF NOT EXISTS attempts (
 """
 
 
+# --- Store: all reads and writes against the SQLite file ---
 class Store:
+    """Persistent store for the demo. Every state change runs inside one transaction so it is all-or-nothing."""
     def __init__(self, path):
+        """Open (or create) the database file, apply the schema, and seed sample data on first use."""
         self.path = str(Path(path).resolve())
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         with self.connection() as db:
+            # Write-ahead logging lets readers and a writer work at the same time.
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript(SCHEMA)
         with self.transaction() as db:
@@ -108,6 +126,7 @@ class Store:
 
     @contextmanager
     def connection(self):
+        """Context manager yielding a new SQLite connection with foreign keys enforced; always closed afterwards."""
         db = sqlite3.connect(self.path, timeout=15, isolation_level=None)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA foreign_keys=ON")
@@ -118,7 +137,9 @@ class Store:
 
     @contextmanager
     def transaction(self):
+        """Context manager yielding a connection inside BEGIN IMMEDIATE; commits on success and rolls back on any error."""
         with self.connection() as db:
+            # Take the write lock up front so concurrent approvals are serialized.
             db.execute("BEGIN IMMEDIATE")
             try:
                 yield db
@@ -129,10 +150,13 @@ class Store:
                 db.commit()
 
     def _seed(self, db, scenario):
+        """Wipe all tables and insert the sample organizations, people, and seat assignments for the chosen scenario."""
         timestamp = now()
+        # Delete in dependency order so foreign keys are never violated.
         for table in ("attempts", "events", "notifications", "payments", "requests", "assignments", "users", "organizations", "demo_state"):
             db.execute("DELETE FROM " + table)
         db.execute("DELETE FROM sqlite_sequence")
+        # A fresh random epoch invalidates any quote issued before the reset.
         db.executemany("INSERT INTO demo_state(key,value) VALUES(?,?)", [
             ("epoch", str(uuid.uuid4())), ("scenario", scenario), ("payment_result", "success")])
         db.executemany("INSERT INTO organizations(id,name,seat_count) VALUES(?,?,?)", [
@@ -153,6 +177,7 @@ class Store:
         self._event(db, 1, None, None, None, "scenario_ready", "Sample workspace is ready", {"scenario": scenario})
 
     def actor(self, db, actor_id):
+        """Look up the demo identity by id and return it as a dict; raises 401 if missing or unknown."""
         if not isinstance(actor_id, str) or not actor_id or len(actor_id) > 80:
             raise DomainError(401, "demo_identity_required", "Choose a valid demo identity.")
         row = db.execute("SELECT * FROM users WHERE id=?", (actor_id,)).fetchone()
@@ -161,6 +186,7 @@ class Store:
         return dict(row)
 
     def _request(self, db, actor, request_id, admin=False):
+        """Fetch one request in the actor's organization. Developers may see only their own; `admin=True` requires an administrator."""
         if admin and actor["role"] != "admin":
             raise DomainError(403, "admin_required", "Only your organization’s administrator can review requests.")
         row = db.execute("SELECT r.*,u.name AS requester_name,u.email AS requester_email FROM requests r JOIN users u ON u.id=r.user_id WHERE r.id=? AND r.org_id=?", (request_id, actor["org_id"])).fetchone()
@@ -169,12 +195,15 @@ class Store:
         return dict(row)
 
     def _event(self, db, org_id, actor_id, subject_id, request_id, kind, summary, detail):
+        """Append an entry to the activity (audit) log."""
         db.execute("INSERT INTO events(org_id,actor_id,subject_user_id,request_id,kind,summary,detail_json,created_at) VALUES(?,?,?,?,?,?,?,?)", (org_id, actor_id, subject_id, request_id, kind, summary, json.dumps(detail, sort_keys=True), now()))
 
     def _notify(self, db, org_id, user_id, request_id, title, message):
+        """Add an in-app notification for one user."""
         db.execute("INSERT INTO notifications(org_id,user_id,request_id,title,message,created_at) VALUES(?,?,?,?,?,?)", (org_id, user_id, request_id, title, message, now()))
 
     def _organization(self, db, org_id):
+        """Return an organization with its assigned seats, available seats, and next-period cost computed."""
         org = dict(db.execute("SELECT * FROM organizations WHERE id=?", (org_id,)).fetchone())
         org["assigned_seats"] = db.execute("SELECT COUNT(*) FROM assignments WHERE org_id=?", (org_id,)).fetchone()[0]
         org["available_seats"] = org["seat_count"] - org["assigned_seats"]
@@ -182,6 +211,7 @@ class Store:
         return org
 
     def workspace(self, actor_id):
+        """Build everything the screen needs for this identity; administrators also get the member list and payments, developers see only their own data."""
         with self.connection() as db:
             db.execute("BEGIN")
             actor = self.actor(db, actor_id)
@@ -205,10 +235,12 @@ class Store:
             return result
 
     def request_detail(self, actor_id, request_id):
+        """Return one request, if this identity is allowed to see it."""
         with self.connection() as db:
             return self._request(db, self.actor(db, actor_id), request_id)
 
     def shared_workspace(self, actor_id):
+        """Return the shared review workspace sample, only for members who hold an assigned seat (else 403)."""
         with self.connection() as db:
             actor = self.actor(db, actor_id)
             assigned = db.execute("SELECT 1 FROM assignments WHERE user_id=? AND org_id=?", (actor_id, actor["org_id"])).fetchone()
@@ -218,6 +250,7 @@ class Store:
                     "review": {"title": "Navigation update", "description": "A shared place for the team’s next review.", "status": "Ready for review"}}
 
     def create_request(self, actor_id, body):
+        """Create an access request for the caller. A repeat call returns the existing open request instead of making another."""
         require_fields(body, ())
         with self.transaction() as db:
             actor = self.actor(db, actor_id)
@@ -236,19 +269,23 @@ class Store:
             return {"created": True, "request": self._request(db, actor, request_id)}
 
     def _quote(self, db, actor, request_id):
+        """Compute the cost preview for approving a request, including a token that fingerprints the current state so stale previews can be detected."""
         request = self._request(db, actor, request_id, admin=True)
         if request["user_id"] == actor["id"]:
             raise DomainError(403, "self_approval_forbidden", "An administrator cannot approve their own request.")
         if request["status"] not in ("pending", "payment_failed"):
             raise DomainError(409, "request_closed", "This request has already been resolved.")
         org = self._organization(db, actor["org_id"])
+        # A new seat is bought only when every paid seat is already assigned.
         added = 1 if org["available_seats"] <= 0 else 0
+        # Prorated charge for the days left in the period (integer cents).
         immediate = added * SEAT_PRICE_CENTS * DAYS_REMAINING // PERIOD_DAYS
         payload = {
             "epoch": db.execute("SELECT value FROM demo_state WHERE key='epoch'").fetchone()[0],
             "request_id": request_id, "request_status": request["status"], "attempt_count": request["attempt_count"],
             "org_id": org["id"], "revision": org["revision"], "seat_count": org["seat_count"], "assigned_seats": org["assigned_seats"],
         }
+        # The token changes whenever any of these facts change.
         token = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
         return {"token": token, "request_id": request_id, "requester_name": request["requester_name"],
                 "sample": True, "currency": "USD", "added_seats": added, "current_seats": org["seat_count"],
@@ -258,21 +295,25 @@ class Store:
                 "seat_price_cents": SEAT_PRICE_CENTS, "period_days": PERIOD_DAYS, "days_remaining": DAYS_REMAINING}
 
     def quote(self, actor_id, request_id):
+        """Public wrapper: return the cost preview for an administrator reviewing a request."""
         with self.connection() as db:
             db.execute("BEGIN")
             return self._quote(db, self.actor(db, actor_id), request_id)
 
     def approve(self, actor_id, request_id, body):
+        """Approve a request: verify the quote token, honor idempotency, take the (simulated) payment if a seat must be added, then assign the seat and log events."""
         require_fields(body, ("quote_token", "idempotency_key"), ("quote_token", "idempotency_key"))
         valid_key(body["idempotency_key"])
         if not isinstance(body["quote_token"], str) or len(body["quote_token"]) != 64:
             raise DomainError(400, "invalid_quote", "Review the current cost preview before approving.")
+        # Fingerprint of this approval so a reused attempt key with different content can be detected.
         payload_hash = hashlib.sha256(json.dumps({"request_id": request_id, **body}, sort_keys=True).encode()).hexdigest()
         with self.transaction() as db:
             actor = self.actor(db, actor_id)
             request = self._request(db, actor, request_id, admin=True)
             if actor["id"] == request["user_id"]:
                 raise DomainError(403, "self_approval_forbidden", "An administrator cannot approve their own request.")
+            # Replay protection: the same key and payload returns the saved result without repeating the purchase.
             prior = db.execute("SELECT * FROM attempts WHERE actor_id=? AND attempt_key=?", (actor_id, body["idempotency_key"])).fetchone()
             if prior:
                 if prior["payload_hash"] != payload_hash:
@@ -281,11 +322,13 @@ class Store:
             if request["status"] == "approved":
                 return {"outcome": "already_approved", "request_id": request_id, "replayed": False, "message": "Access was already granted. No additional purchase was made."}
             quote = self._quote(db, actor, request_id)
+            # The preview the admin saw no longer matches current state.
             if quote["token"] != body["quote_token"]:
                 raise DomainError(409, "stale_quote", "The team or request changed. Review the updated cost before approving.")
             timestamp = now()
             payment_id = None
             payment_result = db.execute("SELECT value FROM demo_state WHERE key='payment_result'").fetchone()[0]
+            # Only a purchase that costs money goes through the simulated payment step.
             if quote["immediate_cents"]:
                 succeeded = payment_result == "success"
                 cur = db.execute("INSERT INTO payments(org_id,request_id,actor_id,amount_cents,status,created_at) VALUES(?,?,?,?,?,?)", (actor["org_id"], request_id, actor_id, quote["immediate_cents"], "succeeded" if succeeded else "failed", timestamp))
@@ -298,6 +341,7 @@ class Store:
                     result = {"outcome": "payment_failed", "request_id": request_id, "payment_id": payment_id, "charged_cents": 0, "attempted_cents": quote["immediate_cents"], "replayed": False, "message": "Simulated payment failed. No charge succeeded, no seat was added, and the request is ready to retry."}
                     self._save_attempt(db, actor_id, body, payload_hash, result)
                     return result
+            # Success path: add the seat if needed, assign it to the requester, and close the request.
             db.execute("UPDATE organizations SET seat_count=seat_count+?,revision=revision+1 WHERE id=?", (quote["added_seats"], actor["org_id"]))
             db.execute("INSERT INTO assignments(user_id,org_id,assigned_at) VALUES(?,?,?)", (request["user_id"], actor["org_id"], timestamp))
             db.execute("UPDATE users SET membership='member' WHERE id=?", (request["user_id"],))
@@ -310,9 +354,11 @@ class Store:
             return result
 
     def _save_attempt(self, db, actor_id, body, payload_hash, result):
+        """Store the result of an approval attempt so a retry with the same key can replay it."""
         db.execute("INSERT INTO attempts VALUES(?,?,?,?,?)", (actor_id, body["idempotency_key"], payload_hash, json.dumps(result, sort_keys=True), now()))
 
     def deny(self, actor_id, request_id, body):
+        """Decline a request (administrators only, never their own) and notify the requester; repeating it is harmless."""
         require_fields(body, ())
         with self.transaction() as db:
             actor = self.actor(db, actor_id)
@@ -329,6 +375,7 @@ class Store:
             return {"outcome": "denied", "request_id": request_id, "replayed": False}
 
     def read_notifications(self, actor_id, body):
+        """Mark all of the caller's unread notifications as read."""
         require_fields(body, ())
         with self.transaction() as db:
             actor = self.actor(db, actor_id)
@@ -336,6 +383,7 @@ class Store:
             return {"ok": True}
 
     def demo_info(self):
+        """Return demo settings: payment outcome, current scenario, selectable personas, and scenario list."""
         with self.connection() as db:
             state = {r["key"]: r["value"] for r in db.execute("SELECT key,value FROM demo_state WHERE key!='epoch'")}
             state["personas"] = [dict(r) for r in db.execute("SELECT u.id,u.name,u.role,o.name AS organization FROM users u JOIN organizations o ON o.id=u.org_id WHERE u.id IN ('maya','eli','quinn','robin') ORDER BY u.org_id,u.role DESC,u.name")]
@@ -343,6 +391,7 @@ class Store:
             return state
 
     def demo_payment(self, body):
+        """Set whether simulated payments succeed or fail."""
         require_fields(body, ("result",), ("result",))
         if body["result"] not in ("success", "failure"):
             raise DomainError(400, "invalid_payment_result", "Choose success or failure for simulated payments.")
@@ -351,6 +400,7 @@ class Store:
         return {"payment_result": body["result"]}
 
     def reset(self, body):
+        """Reset the sample data to a chosen scenario; requires the exact confirmation text."""
         require_fields(body, ("scenario", "confirm"), ("scenario", "confirm"))
         if body["confirm"] != "RESET DEMO":
             raise DomainError(400, "reset_confirmation_required", "Confirm that this resets only the sample demo data.")

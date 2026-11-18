@@ -1,3 +1,10 @@
+/*
+ * Program: Access Lab - styles.css
+ * Programmer: Ethan-da-Tech-Wizard (written with Claude, an AI assistant)
+ * Last Modified: 2026-11-18
+ * Purpose: Stylesheet for the Access Lab page: design tokens, layout, components, dialogs, and responsive and reduced-motion rules.
+ */
+/* ===== Design tokens: colors, radius, shadow, and base font ===== */
 :root {
   --navy: #182d35;
   --navy-soft: #223a43;
@@ -21,6 +28,7 @@
   font-synthesis: none;
 }
 
+/* ===== Base element resets and focus styles ===== */
 * {
   box-sizing: border-box;
 }
@@ -83,6 +91,7 @@ button svg {
   pointer-events: none;
 }
 
+/* ===== Layout: app shell and sidebar ===== */
 .app-shell {
   display: flex;
   min-height: 100vh;
@@ -308,6 +317,7 @@ button svg {
   padding: 11px 4px 0;
 }
 
+/* ===== Top bar, breadcrumbs, avatars, and demo strip ===== */
 .workspace-shell {
   margin-left: 245px;
   width: calc(100% - 245px);
@@ -470,6 +480,7 @@ button svg {
   text-decoration: underline;
 }
 
+/* ===== Main area, page headings, and summary cards ===== */
 main {
   max-width: 1450px;
   padding: 43px 43px 30px;
@@ -606,6 +617,7 @@ h1+p,.page-subtitle {
   background: #6b987e;
 }
 
+/* ===== Panels, status lines, and the access journey steps ===== */
 .content-grid {
   display: grid;
   grid-template-columns: minmax(0,1.52fr) minmax(285px,1fr);
@@ -787,6 +799,7 @@ h1+p,.page-subtitle {
   margin-top: 14px;
 }
 
+/* ===== Buttons ===== */
 .button {
   display: inline-flex;
   align-items: center;
@@ -868,6 +881,7 @@ h1+p,.page-subtitle {
   flex: none;
 }
 
+/* ===== Workspace preview, support note, and mini activity ===== */
 .workspace-preview {
   padding: 25px;
   background: #ecf0e6;
@@ -1076,6 +1090,7 @@ h1+p,.page-subtitle {
   margin-left: auto;
 }
 
+/* ===== Request list, status badges, and empty states ===== */
 .request-list {
   padding: 0 24px 22px;
 }
@@ -1205,6 +1220,7 @@ h1+p,.page-subtitle {
   margin: 9px auto 0;
 }
 
+/* ===== Admin note, cost example, and team table ===== */
 .admin-note {
   background: #eaf0e7;
   border: 1px solid #dfe6d9;
@@ -1349,6 +1365,7 @@ h1+p,.page-subtitle {
   margin-top: 26px;
 }
 
+/* ===== Activity timeline and notifications list ===== */
 .activity-page {
   padding: 4px 26px 20px;
 }
@@ -1449,6 +1466,7 @@ h1+p,.page-subtitle {
   margin-top: 9px;
 }
 
+/* ===== Footer and toast ===== */
 .workspace-footer {
   padding: 15px 43px 25px;
   display: flex;
@@ -1500,6 +1518,7 @@ h1+p,.page-subtitle {
   display: none;
 }
 
+/* ===== Dialogs: review, quote box, and demo controls ===== */
 dialog {
   border: 1px solid #dee7db;
   border-radius: 16px;
@@ -1802,6 +1821,7 @@ select {
   color: #53664d;
 }
 
+/* ===== Loading, error, and sample workspace panels ===== */
 .loading-panel {
   display: flex;
   align-items: center;
@@ -1904,6 +1924,7 @@ select {
   border-radius: 4px;
 }
 
+/* ===== Accessibility helpers (screen-reader-only text, skip link) ===== */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -1932,6 +1953,7 @@ select {
   transform: translateY(0);
 }
 
+/* ===== Animation and responsive breakpoints ===== */
 @keyframes pulse {
   50% {
     opacity: .35;

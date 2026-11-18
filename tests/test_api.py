@@ -1,3 +1,8 @@
+# Program: Access Lab - test_api.py
+# Programmer: Ethan-da-Tech-Wizard (written with Claude, an AI assistant)
+# Last Modified: 2026-11-18
+# Purpose: End-to-end tests that start the real HTTP server on a free local port and check the API, security guards, and validation.
+"""HTTP-level tests of the local API, including origin, host, and input checks."""
 import http.client
 import json
 from pathlib import Path
@@ -9,8 +14,10 @@ from app.server import make_server
 
 
 class ApiTests(unittest.TestCase):
+    """Tests that call the running server over HTTP."""
     @classmethod
     def setUpClass(cls):
+        """Start one server (port 0 picks a free port) on a temporary database in a background thread."""
         cls.temp = tempfile.TemporaryDirectory()
         cls.server = make_server(port=0, db_path=Path(cls.temp.name) / "api.sqlite3")
         cls.port = cls.server.server_port
@@ -19,15 +26,18 @@ class ApiTests(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        """Stop the server and delete the temporary database."""
         cls.server.shutdown()
         cls.server.server_close()
         cls.thread.join()
         cls.temp.cleanup()
 
     def setUp(self):
+        """Reset sample data before every test."""
         self.server.store.reset({"scenario": "full", "confirm": "RESET DEMO"})
 
     def call(self, method, path, actor=None, body=None, headers=None, raw=None):
+        """Send one request and return (status, parsed JSON or text)."""
         conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
         send_headers = {}
         if actor is not None:
@@ -48,16 +58,19 @@ class ApiTests(unittest.TestCase):
         return status, result
 
     def request_id(self):
+        """Helper: create an access request as the first developer persona and return its id."""
         status, data = self.call("POST", "/api/requests", "maya", {})
         self.assertEqual(status, 201)
         return data["request"]["id"]
 
     def test_unknown_or_missing_identity_is_rejected(self):
+        """Missing, unknown, or injection-style identities get 401."""
         for actor in (None, "unknown", "eli OR 1=1"):
             status, _ = self.call("GET", "/api/workspace", actor)
             self.assertEqual(status, 401)
 
     def test_api_enforces_roles_and_organization_boundaries(self):
+        """Developers get 403 and other organizations get 404 on review endpoints."""
         request_id = self.request_id()
         body = {"quote_token": "0" * 64, "idempotency_key": "permission-check"}
         for endpoint in ("quote", "approve", "deny"):
@@ -69,6 +82,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(self.call("POST", "/api/subscriptions", "maya", {"seat_count": 10})[0], 404)
 
     def test_api_full_journey_and_duplicate_request(self):
+        """Request, quote, approve, replay, and open the shared workspace."""
         self.assertEqual(self.call("GET", "/api/shared-workspace", "maya")[0], 403)
         request_id = self.request_id()
         self.assertEqual(self.call("POST", "/api/requests", "maya", {})[0], 200)
@@ -85,6 +99,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(self.call("GET", "/api/shared-workspace", "maya")[0], 200)
 
     def test_prices_and_target_identity_cannot_be_supplied_by_client(self):
+        """Extra fields such as a price or a target user are rejected."""
         self.assertEqual(self.call("POST", "/api/requests", "maya", {"user_id": "alex"})[0], 400)
         request_id = self.request_id()
         _, quote = self.call("GET", f"/api/requests/{request_id}/quote", "eli")
@@ -93,6 +108,7 @@ class ApiTests(unittest.TestCase):
         self.assertFalse(self.server.store.workspace("maya")["access"]["enabled"])
 
     def test_cross_origin_host_and_cross_site_requests_are_rejected(self):
+        """Foreign Origin, wrong Host, and cross-site fetches get 403; the exact local origin is allowed."""
         self.assertEqual(self.call("POST", "/api/requests", "maya", {}, {"Origin": "https://other.example"})[0], 403)
         self.assertEqual(self.call("POST", "/api/requests", "maya", {}, {"Origin": "null"})[0], 403)
         self.assertEqual(self.call("POST", "/api/requests", "maya", {}, {"Origin": "http://127.0.0.1:9999"})[0], 403)
@@ -101,6 +117,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(self.call("POST", "/api/requests", "maya", {}, {"Origin": "http://127.0.0.1:" + str(self.port)})[0], 201)
 
     def test_json_validation_and_private_files(self):
+        """Bad content types and bodies are rejected, and files outside the allowed folders are not served."""
         self.assertEqual(self.call("POST", "/api/requests", "maya", raw="{}")[0], 415)
         self.assertEqual(self.call("POST", "/api/requests", "maya", raw="{", headers={"Content-Type": "application/json"})[0], 400)
         self.assertEqual(self.call("POST", "/api/requests", "maya", body=[])[0], 400)
@@ -110,11 +127,13 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(self.call("GET", "/docs/brief.md")[0], 200)
 
     def test_demo_reset_requires_explicit_confirmation_and_known_scenario(self):
+        """Reset needs the confirmation text and a known scenario name."""
         self.assertEqual(self.call("POST", "/api/demo/reset", body={"scenario": "full"})[0], 400)
         self.assertEqual(self.call("POST", "/api/demo/reset", body={"scenario": "unknown", "confirm": "RESET DEMO"})[0], 400)
         self.assertEqual(self.call("POST", "/api/demo/reset", body={"scenario": "spare", "confirm": "RESET DEMO"})[0], 200)
 
     def test_public_bind_is_rejected(self):
+        """Binding to a non-loopback address raises an error."""
         with self.assertRaises(ValueError):
             make_server(host="0.0.0.0", port=0, db_path=Path(self.temp.name) / "never.sqlite3")
 

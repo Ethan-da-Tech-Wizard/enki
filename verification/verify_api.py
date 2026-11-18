@@ -1,3 +1,7 @@
+# Program: Access Lab - verify_api.py
+# Programmer: Ethan-da-Tech-Wizard (written with Claude, an AI assistant)
+# Last Modified: 2026-11-18
+# Purpose: Black-box API verification that launches separate server processes and checks the full journey, writing a JSON results report.
 """Supervisor-owned black-box checks against separate server processes."""
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -9,23 +13,28 @@ import subprocess
 import sys
 import tempfile
 
+# Project root and where the JSON results report is written; `checks` collects passed checks.
 ROOT = Path(__file__).resolve().parents[1]
 REPORT = ROOT / "verification" / "artifacts" / "api-results.json"
 checks = []
 
 
 def record(name, detail=None):
+    """Remember and print one passed check."""
     checks.append({"name": name, "passed": True, "detail": detail})
     print("PASS " + name, flush=True)
 
 
 class RunningApp:
+    """A real server subprocess on a free port, with helpers for making HTTP calls to it."""
     def __init__(self, db, log):
+        """Start the server process and read its first output line to learn the port."""
         self.log = open(log, "a")
         self.process = subprocess.Popen(
             [sys.executable, "-m", "app.server", "--port", "0", "--db", str(db)],
             cwd=ROOT, stdout=subprocess.PIPE, stderr=self.log, text=True,
         )
+        # The server prints its address on the first line; port 0 means the OS picks a free port.
         line = self.process.stdout.readline()
         match = re.search(r"http://127\.0\.0\.1:(\d+)", line)
         if not match:
@@ -36,6 +45,7 @@ class RunningApp:
         self.process.stdout.readline()
 
     def close(self):
+        """Stop the server process and close its pipes and log file."""
         if self.process.poll() is None:
             self.process.terminate()
         self.process.wait(timeout=10)
@@ -44,6 +54,7 @@ class RunningApp:
         self.log.close()
 
     def call(self, path, body=None, actor="maya", status=200, headers=None, raw=None):
+        """Make a GET (or POST when a body is given), assert the expected status, and return the parsed JSON."""
         request_headers = {"X-Demo-User": actor} if actor is not None else {}
         request_body = None
         if body is not None or raw is not None:
@@ -61,21 +72,27 @@ class RunningApp:
             connection.close()
 
     def workspace(self, actor="eli"):
+        """Fetch the workspace view for an identity."""
         return self.call("/api/workspace", actor=actor)
 
     def reset(self, scenario="full"):
+        """Reset demo data to a scenario."""
         self.call("/api/demo/reset", {"scenario": scenario, "confirm": "RESET DEMO"})
 
     def request(self):
+        """Create an access request and return its id."""
         return self.call("/api/requests", {}, status=201)["request"]["id"]
 
     def quote(self, request_id):
+        """Get the administrator's cost preview for a request."""
         return self.call(f"/api/requests/{request_id}/quote", actor="eli")
 
     def approve(self, request_id, quote, key, **kwargs):
+        """Approve a request using a quote token and attempt key."""
         return self.call(f"/api/requests/{request_id}/approve", {"quote_token": quote["token"], "idempotency_key": key}, actor="eli", **kwargs)
 
 
+# Run all checks; any failure is captured and reported at the end.
 app = None
 failure = None
 try:

@@ -1,8 +1,13 @@
+// Program: Access Lab - browser.mjs
+// Programmer: Ethan-da-Tech-Wizard (written with Claude, an AI assistant)
+// Last Modified: 2026-11-18
+// Purpose: Playwright browser check that drives the local UI through the whole access journey, tests layout and text contrast, and writes screenshots and a results report.
 import assert from 'node:assert/strict';
 import {mkdir, writeFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 
+// Setup: locate Playwright and the browser binary (overridable by environment variables), and only allow a local target
 const playwrightPath = process.env.PLAYWRIGHT_MODULE || '/tmp/access-lab-browser-tools/node_modules/playwright/index.mjs';
 const {chromium} = await import(playwrightPath);
 const base = process.env.ACCESS_LAB_URL || 'http://127.0.0.1:8765';
@@ -13,12 +18,15 @@ const browser = await chromium.launch({executablePath:process.env.CHROMIUM_PATH 
 const context = await browser.newContext({viewport:{width:1440,height:1000}, reducedMotion:'reduce'});
 const page = await context.newPage();
 page.setDefaultTimeout(10000);
+// Collect page and console errors so the run can fail on them
 const errors = [];
 page.on('pageerror', e => errors.push(e.message));
 page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
 const checks = [];
 const contrastChecks = [];
 let injectedNetworkFailures = 0;
+// --- Helpers used by the checks below ---
+// record logs a passed check; api makes direct API calls for setup; screenshot saves a full-page image.
 const record = name => {checks.push({name,passed:true}); console.log('PASS ' + name);};
 const api = async (endpoint, body, actor='maya') => {
   const response = await context.request.fetch(base + endpoint, {method:body === undefined ? 'GET' : 'POST',headers:{'X-Demo-User':actor}, ...(body === undefined ? {} : {data:body})});
@@ -27,22 +35,26 @@ const api = async (endpoint, body, actor='maya') => {
 };
 const screenshot = name => page.screenshot({path:path.join(artifacts,name + '.png'),fullPage:true});
 const visibleText = async text => { await page.getByText(text,{exact:false}).first().waitFor({state:'visible'}); };
+// Open the demo dialog.
 const showDemo = async () => {
   await page.locator('.demo-strip [data-action="demo"]').click();
   await page.locator('#demo-dialog').waitFor({state:'visible'});
 };
+// Switch the demo identity through the dialog.
 const persona = async id => {
   await showDemo();
   await page.locator('#persona-select').selectOption(id);
   await page.locator('#demo-dialog').waitFor({state:'hidden'});
   await page.waitForFunction(expected => document.querySelector('#persona-label').textContent.toLowerCase().includes(expected), id);
 };
+// Set the simulated payment result.
 const payment = async result => {
   await showDemo();
   await page.locator('#payment-select').selectOption(result);
   await page.waitForFunction(() => !document.querySelector('#payment-select').disabled);
   await page.locator('[data-action="close-demo"]').click();
 };
+// Reset data to a scenario; the button must stay disabled until confirmed.
 const reset = async scenario => {
   await showDemo();
   await page.locator('#scenario-select').selectOption(scenario);
@@ -52,23 +64,28 @@ const reset = async scenario => {
   await page.locator('#demo-dialog').waitFor({state:'hidden'});
   await page.waitForFunction(() => document.querySelector('#persona-label').textContent.includes('Maya'));
 };
+// Click Request access and wait for the confirmation text.
 const request = async () => {
   await page.locator('[data-action="request"]').click();
   await page.getByText('Your request is with an administrator.',{exact:true}).waitFor();
 };
+// Open the review dialog from the first review button.
 const review = async () => {
   await page.locator('[data-action="review"]').first().click();
   await page.locator('#review-dialog').waitFor({state:'visible'});
   await page.locator('#review-dialog [data-action="approve"]').waitFor({state:'visible'});
 };
+// Approve in the review dialog and wait for it to close.
 const approve = async () => {
   await page.locator('[data-action="approve"]').click();
   await page.locator('#review-dialog').waitFor({state:'hidden'});
 };
+// Assert the page has no horizontal scrolling.
 const overflow = async () => {
   const dimensions = await page.evaluate(() => ({viewport:innerWidth,width:document.documentElement.scrollWidth}));
   assert(dimensions.width <= dimensions.viewport + 1, JSON.stringify(dimensions));
 };
+// Measure text size and color contrast for visible matching elements and assert readable minimums.
 const contrast = async (selectors,label) => {
   const measurements = await page.evaluate(selectors => {
     const rgba = value => value.match(/[\d.]+/g).map(Number);
@@ -92,6 +109,7 @@ const contrast = async (selectors,label) => {
   }
   contrastChecks.push({label,measurements});
 };
+// --- Main run: any error is kept, a screenshot is taken, and the report is written in finally ---
 let failure;
 try {
   await api('/api/demo/reset',{scenario:'full',confirm:'RESET DEMO'});
@@ -242,4 +260,5 @@ try {
   await writeFile(path.join(artifacts,'browser-results.json'),JSON.stringify({checkedAt:new Date().toISOString(),url:base,browser:browser.version(),checks,contrastChecks,errors,injectedNetworkFailures,passed:!failure,failure:failure?.message || null},null,2)+'\n');
   await browser.close();
 }
+// Signal failure to the caller through the exit code.
 if (failure) process.exitCode=1;
