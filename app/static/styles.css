@@ -9,7 +9,17 @@
             and high-contrast modal dialog overlays.
    ============================================================================== */
 /* --- 1. Root Design Tokens & CSS Custom Properties --- */
+
+/* Fit in the repo: the only stylesheet of the Access Lab single-page app (index.html links it, app.js builds the markup that these classes
+   style). Plain CSS with custom properties, no preprocessor or framework, written to be loaded from the same origin because the server's
+   Content-Security-Policy (app/server.py) only allows style-src 'self' (no inline <style>; JS sets classes, not inline styles).
+   Reading order: tokens, base elements, app shell (sidebar and topbar), page content (summary cards, panels, request list, team table, timeline),
+   dialogs, utilities, then the responsive overrides at the end of the file by breakpoint: >=1600, <=1190, <=980, <=720, <=440 px and prefers-reduced-motion.
+   State is expressed with classes toggled by app.js (.active, .complete, .future, .used, .error, .pending / .approved status classes) rather than
+   by inline styles. Colours come from the tokens below; changing a token re-themes the whole app. */
 :root {
+  /* Brand and surface tokens: navy (sidebar and headings), paper (page background), white (cards), ink and muted (text), line (hairlines).
+     Semantic colours: green for success and primary actions, amber for "needs attention", red for errors; each has a pale variant for backgrounds. */
   --navy: #182d35;
   --navy-soft: #223a43;
   --paper: #f6f6f1;
@@ -24,6 +34,8 @@
   --amber-pale: #faf2df;
   --red: #a13e35;
   --red-pale: #fff0eb;
+
+  /* Shared corner radius and a very light shadow (the hex suffix 06 is a 2 percent alpha); the font stack and base colours set here are inherited by the whole app, and font-synthesis: none stops browsers from faking bold or italic. */
   --radius: 13px;
   --shadow: 0 4px 16px #17302906;
   font-family: Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
@@ -32,6 +44,7 @@
   font-synthesis: none;
 }
 
+/* Reset: all elements use border-box sizing so padding never changes a box's declared width. */
 * {
   box-sizing: border-box;
 }
@@ -40,6 +53,7 @@ body {
   margin: 0;
 }
 
+/* Form controls inherit the page font instead of the browser default so buttons and selects match the text. */
 button,input,select {
   font: inherit;
 }
@@ -65,6 +79,7 @@ button {
   color: inherit;
 }
 
+/* Keyboard focus ring (accessibility): shown only for keyboard navigation (:focus-visible), never removed without a replacement. */
 button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible,main:focus-visible {
   outline: 3px solid #6bcab2;
   outline-offset: 4px;
@@ -79,6 +94,7 @@ h1,h2,h3,p {
   margin: 0;
 }
 
+/* Icons are inline SVG drawn by app.js (icon()); they inherit the text colour through stroke and fill rules defined for each context. */
 svg {
   display: block;
   width: 21px;
@@ -94,11 +110,13 @@ button svg {
   pointer-events: none;
 }
 
+/* App frame: sidebar on the left and the workspace on the right, side by side (flex); min-height keeps the sidebar full height on short pages. */
 .app-shell {
   display: flex;
   min-height: 100vh;
 }
 
+/* Left navigation column: brand, organisation switcher, navigation links, and the demo note at the bottom. It becomes a top or collapsible bar in the narrow-screen overrides below. */
 .sidebar {
   background: var(--navy);
   color: #d9e4e4;
@@ -111,6 +129,7 @@ button svg {
   z-index: 10;
 }
 
+/* Brand mark and name at the top of the sidebar. */
 .brand {
   display: flex;
   align-items: center;
@@ -141,6 +160,7 @@ button svg {
   color: #a3d7bd;
 }
 
+/* Organisation badge (monogram plus name) under the brand. It shows which team the active demo identity belongs to; it is display only. */
 .org-switch {
   border: 1px solid #47606870;
   background: #223941;
@@ -185,6 +205,7 @@ button svg {
   color: #b1c3c7;
 }
 
+/* Small uppercase section label above the nav links. */
 .nav-label {
   color: #8da5ad;
   font-size: 10px;
@@ -200,6 +221,7 @@ button svg {
   gap: 6px;
 }
 
+/* Navigation entries, filled in by app.js (the set depends on the persona's role). The .active modifier marks the current view (set by app.js); .nav-counter is the unread-notification bubble. */
 .nav-item {
   display: flex;
   align-items: center;
@@ -241,6 +263,7 @@ button svg {
   place-items: center;
 }
 
+/* Footer area of the sidebar: tagline note with a small decorative orbit, the "Demo controls & evidence" button and the "independent portfolio prototype" disclaimer. */
 .sidebar-bottom {
   margin-top: auto;
   padding-top: 35px;
@@ -319,6 +342,7 @@ button svg {
   padding: 11px 4px 0;
 }
 
+/* Right-hand column that holds the top bar and the page content; it takes the remaining width. */
 .workspace-shell {
   margin-left: 245px;
   width: calc(100% - 245px);
@@ -327,6 +351,7 @@ button svg {
   flex-direction: column;
 }
 
+/* Header row across the top of the workspace (not sticky): breadcrumbs, a "local" label that tells the user the app only runs on their own machine, and icon buttons (refresh, notifications, identity avatar). */
 .topbar {
   height: 79px;
   display: flex;
@@ -442,6 +467,7 @@ button svg {
   box-sizing: content-box;
 }
 
+/* Information strip under the top bar: says this is a portfolio demo with fictional data and holds the "Viewing as ..." button that opens the demo-controls dialog (switch persona, scenario, simulated payment result), so a reviewer can try every role. */
 .demo-strip {
   display: flex;
   align-items: center;
@@ -481,6 +507,7 @@ button svg {
   text-decoration: underline;
 }
 
+/* Main content area. app.js replaces its contents on every render (it is a live region target for screen-reader announcements via #announcer). */
 main {
   max-width: 1450px;
   padding: 43px 43px 30px;
@@ -489,6 +516,7 @@ main {
   flex: 1;
 }
 
+/* Page title block: eyebrow label, h1, subtitle and an optional tag on the right, produced by heading() in app.js. */
 .page-heading {
   display: flex;
   align-items: flex-end;
@@ -530,6 +558,7 @@ h1+p,.page-subtitle {
   margin-bottom: 2px;
 }
 
+/* Row of three summary cards (paid seats, open requests / available seats, next-period cost), produced by summary() in app.js. .seats-track draws one small square per seat; .used marks assigned seats. */
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(3,minmax(0,1fr));
@@ -617,6 +646,7 @@ h1+p,.page-subtitle {
   background: #6b987e;
 }
 
+/* Two-column page body (main panel and side panel) that collapses to one column on narrow screens. */
 .content-grid {
   display: grid;
   grid-template-columns: minmax(0,1.52fr) minmax(285px,1fr);
@@ -624,6 +654,7 @@ h1+p,.page-subtitle {
   align-items: start;
 }
 
+/* Generic white card used throughout; .panel-head holds its title, .panel-body its content. */
 .panel {
   background: #fff;
   border: 1px solid var(--line);
@@ -715,6 +746,7 @@ h1+p,.page-subtitle {
   margin-top: 4px;
 }
 
+/* Vertical "journey" stepper on the developer view: request, review, seat, workspace. Step states are .complete (done), the current step, and .future (greyed out); .step-circle holds the number or check icon. */
 .access-journey {
   margin: 25px 0 0;
   list-style: none;
@@ -794,6 +826,7 @@ h1+p,.page-subtitle {
   color: #53664d;
 }
 
+/* Button system: the base .button, its variants (primary, secondary, .text for link-like buttons) and the disabled state. Buttons carry data-action attributes that app.js reads in one delegated click handler. */
 .step-text .button {
   margin-top: 14px;
 }
@@ -879,6 +912,7 @@ h1+p,.page-subtitle {
   flex: none;
 }
 
+/* Teaser card for the shared review workspace, locked until the user has a seat: icon, feature list, and an avatar stack of teammates. */
 .workspace-preview {
   padding: 25px;
   background: #ecf0e6;
@@ -1042,6 +1076,7 @@ h1+p,.page-subtitle {
   line-height: 1.8;
 }
 
+/* Compact recent-activity list shown on the workspace page (a dot, text and time per entry). */
 .activity-mini {
   margin-top: 25px;
 }
@@ -1087,6 +1122,7 @@ h1+p,.page-subtitle {
   margin-left: auto;
 }
 
+/* Admin list of access requests: each row (.request-row) has the requester, a status badge and action buttons. The status classes (.pending, .payment_failed, .approved, .denied) are the same strings the server returns, applied by statusBadge() in app.js. */
 .request-list {
   padding: 0 24px 22px;
 }
@@ -1182,6 +1218,7 @@ h1+p,.page-subtitle {
   margin-left: auto;
 }
 
+/* Placeholder shown when a list has no items (from emptyState() in app.js). */
 .empty-state {
   text-align: center;
   padding: 33px 24px 38px;
@@ -1216,6 +1253,7 @@ h1+p,.page-subtitle {
   margin: 9px auto 0;
 }
 
+/* Explanatory notes for administrators, including the worked cost example (.cost-example). */
 .admin-note {
   background: #eaf0e7;
   border: 1px solid #dfe6d9;
@@ -1277,6 +1315,7 @@ h1+p,.page-subtitle {
   margin-top: 6px;
 }
 
+/* Team roster table (admin only): name, role and whether a paid seat is assigned. .table-wrap lets the table scroll sideways on small screens. */
 .team-panel {
   margin-top: 24px;
 }
@@ -1360,6 +1399,7 @@ h1+p,.page-subtitle {
   margin-top: 26px;
 }
 
+/* Full activity timeline page: .timeline-item rows with a symbol, a message and a timestamp. */
 .activity-page {
   padding: 4px 26px 20px;
 }
@@ -1414,6 +1454,7 @@ h1+p,.page-subtitle {
   line-height: 1.8;
 }
 
+/* Notification inbox page; unread items are styled differently from read ones. */
 .notification-list {
   padding: 0 25px 15px;
 }
@@ -1460,6 +1501,7 @@ h1+p,.page-subtitle {
   margin-top: 9px;
 }
 
+/* Small footer under the page content with the sample-data disclaimer. */
 .workspace-footer {
   padding: 15px 43px 25px;
   display: flex;
@@ -1484,6 +1526,7 @@ h1+p,.page-subtitle {
   padding: 0 8px;
 }
 
+/* Temporary message bubble (toast() in app.js) for success and error feedback; .error switches the colour. */
 .toast {
   position: fixed;
   bottom: 24px;
@@ -1511,6 +1554,7 @@ h1+p,.page-subtitle {
   display: none;
 }
 
+/* Native <dialog> elements: the cost-review dialog and the demo-controls dialog. Using the platform dialog gives focus trapping and Escape-to-close for free; width is min(590px, viewport - 32px) so it never touches the screen edges, and a tall dialog scrolls inside itself (max-height 90vh). */
 dialog {
   border: 1px solid #dee7db;
   border-radius: 16px;
@@ -1523,11 +1567,13 @@ dialog {
   overflow: auto;
 }
 
+/* Dimmed, slightly blurred overlay behind an open dialog. */
 dialog::backdrop {
   background: #122c35a6;
   backdrop-filter: blur(3px);
 }
 
+/* Cost-review dialog: heading, a person block for the requester, the quote box (what will be charged now and next period, and the proration formula), outcome messages, a note that payment is simulated, and the action buttons. */
 .dialog-heading {
   display: flex;
   align-items: flex-start;
@@ -1708,6 +1754,7 @@ dialog::backdrop {
   line-height: 1.8;
 }
 
+/* Demo-controls dialog: scenario selector, simulated payment result, reset, walkthrough steps and evidence links. */
 .demo-dialog {
   width: min(625px,calc(100% - 32px));
   padding-bottom: 10px;
@@ -1813,6 +1860,7 @@ select {
   color: #53664d;
 }
 
+/* Initial loading placeholder with a pulsing dot (animation defined by the pulse keyframes). */
 .loading-panel {
   display: flex;
   align-items: center;
@@ -1831,6 +1879,7 @@ select {
   animation: pulse 1s ease infinite;
 }
 
+/* Shown when the workspace cannot be loaded (server stopped or unreadable response) with retry buttons, from refresh() in app.js. */
 .error-panel {
   padding: 30px;
   background: #fff;
@@ -1855,6 +1904,7 @@ select {
   margin-top: 20px;
 }
 
+/* The shared review workspace shown to users who hold a seat (sample review content). */
 .unlocked-workspace {
   border: 1px solid #dbe8d6;
   border-radius: 10px;
@@ -1915,6 +1965,7 @@ select {
   border-radius: 4px;
 }
 
+/* Screen-reader-only text: moved out of view (1px, clipped) but still read by assistive technology. Used for the live-region announcer and hidden labels. */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -1927,6 +1978,7 @@ select {
   border: 0;
 }
 
+/* "Skip to main content" link: parked above the viewport and slid into view when it receives keyboard focus, so keyboard users can bypass the sidebar. */
 .skip-link {
   position: fixed;
   top: 10px;
@@ -1943,12 +1995,14 @@ select {
   transform: translateY(0);
 }
 
+/* Fading pulse for loading dots. */
 @keyframes pulse {
   50% {
     opacity: .35;
   }
 }
 
+/* Large screens (1600 px and wider): more generous spacing and column widths so content does not look stretched or lost. */
 @media(min-width:1600px) {
   main {
     padding-top: 52px;
@@ -1967,6 +2021,7 @@ select {
   }
 }
 
+/* Medium-large screens: tighten spacing and rearrange the panels that no longer fit side by side. */
 @media(max-width:1190px) {
   .sidebar {
     width: 215px;
@@ -2026,6 +2081,7 @@ select {
   }
 }
 
+/* Tablet width: the sidebar stops being a full-height column (becomes a compact bar), grids drop to fewer columns, and the topbar controls wrap. */
 @media(max-width:980px) {
   .sidebar {
     width: 190px;
@@ -2150,6 +2206,7 @@ select {
   }
 }
 
+/* Large phones: single-column layouts, larger tap targets, tables allowed to scroll sideways, dialogs near full width. */
 @media(max-width:720px) {
   .summary-value {
     display: block;
@@ -2472,6 +2529,7 @@ select {
   }
 }
 
+/* Small phones: final tightening of padding and font sizes; the biggest override block in the file because every component has a compact variant. */
 @media(max-width:440px) {
   .summary-label,.summary-description,.summary-value>small {
     font-size: 12px;
@@ -2635,6 +2693,7 @@ select {
   }
 }
 
+/* Accessibility: for users who ask the operating system to reduce motion, animations and transitions are switched off or shortened. */
 @media(prefers-reduced-motion:reduce) {
   *,*:before,*:after {
     animation: none!important;

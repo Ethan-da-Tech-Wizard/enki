@@ -27,6 +27,10 @@ import sqlite3
 import uuid
 
 # Base price per additional seat per standard billing period (in integer cents: $12.00)
+
+# All money is kept as integer cents (never floats), so $12.00 is 1200 and every calculation is exact. The number is sample pricing for the
+# demo, not a real price list. The two constants after it fix a 30-day cycle with 15 days left, so the prorated charge for one new seat is always
+# 1200 x 15 // 30 = 600 cents ($6.00); using "//" (integer division) means any remainder is dropped instead of becoming a fractional cent.
 SEAT_PRICE_CENTS = 1200
 # Fixed duration of subscription billing cycle in days
 PERIOD_DAYS = 30
@@ -103,6 +107,13 @@ def valid_key(key):
 
 # Comprehensive relational schema definition supporting relational integrity,
 # referential actions, unique partial indexes for single active requests, and idempotency tracking.
+# Schema notes:
+# Partial unique index: at most one OPEN request (pending or payment_failed) per user and organisation, enforced by the database itself.
+# That makes duplicate clicks and concurrent submissions safe even if the application checks were bypassed or raced; approved and denied requests are
+# excluded from the index, so a user can ask again after a denial.
+# Idempotency ledger: one row per (actor, client-chosen attempt key) with a hash of the request and the stored response. Repeating the same key and
+# payload replays the saved response instead of charging twice; the same key with a different payload is rejected (see approve()).
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS demo_state (
     key TEXT PRIMARY KEY,
@@ -193,10 +204,13 @@ class Store:
         Args:
             path: Target filesystem path for SQLite database file.
         """
+
+        # Absolute path so a later change of the working directory cannot point the store at a different file.
         self.path = str(Path(path).resolve())
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         # Configure Write-Ahead Logging (WAL) for concurrency and apply baseline schema
         with self.connection() as db:
+            # WAL (write-ahead log) lets readers continue while a write is in progress, which matters because the HTTP server handles requests in several threads. The setting persists in the database file.
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript(SCHEMA)
         # Check if demonstrative seed epoch exists; populate if uninitialized
@@ -210,6 +224,8 @@ class Store:
         
         Enforces foreign key constraint checks and establishes a 15-second busy timeout.
         """
+
+        # isolation_level=None disables Python's automatic transaction handling, so transactions are opened and closed explicitly (BEGIN / COMMIT) exactly where the code says. timeout=15 waits up to 15 s for another writer instead of failing at once.
         db = sqlite3.connect(self.path, timeout=15, isolation_level=None)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA foreign_keys=ON")
@@ -226,6 +242,7 @@ class Store:
         automatically committing on clean completion and issuing ROLLBACK on any raised exception.
         """
         with self.connection() as db:
+            # IMMEDIATE takes the write lock at the start. With a plain BEGIN two concurrent approvals could both read "one seat free" and then both write (write skew); here the second one waits and sees the first one's result, which is what the concurrency tests rely on.
             db.execute("BEGIN IMMEDIATE")
             try:
                 yield db
@@ -246,10 +263,13 @@ class Store:
         # Cleanly purge existing tables in reverse dependency order
         for table in ("attempts", "events", "notifications", "payments", "requests", "assignments", "users", "organizations", "demo_state"):
             db.execute("DELETE FROM " + table)
+
+        # Reset AUTOINCREMENT counters so request and payment ids start from 1 again after a demo reset.
         db.execute("DELETE FROM sqlite_sequence")
         
         # Initialize runtime demonstration parameters and scenario state
         db.executemany("INSERT INTO demo_state(key,value) VALUES(?,?)", [
+            # A new random epoch on every reset. It is part of every quote token, so a quote taken before a reset can never be approved afterwards, even if the new data reuses the same request id.
             ("epoch", str(uuid.uuid4())),
             ("scenario", scenario),
             ("payment_result", "success"),
@@ -371,6 +391,7 @@ class Store:
             dict: Full state tree consumed by client single-page application.
         """
         with self.connection() as db:
+            # A deferred BEGIN takes a read snapshot at the first query, so all reads in this call see one consistent state even if a writer commits in between. No write lock is taken.
             db.execute("BEGIN")
             actor = self.actor(db, actor_id)
             org = self._organization(db, actor["org_id"])
@@ -475,6 +496,8 @@ class Store:
         added = 1 if org["available_seats"] <= 0 else 0
         
         # Compute exact integer prorated billing cents: avoids floating-point precision hazards
+
+        # Charge now: a new seat is bought only when no seat is free (added is 1 or 0), prorated for the remaining days of the cycle. When a paid seat is already free the cost is 0 and no payment is attempted.
         immediate = added * SEAT_PRICE_CENTS * DAYS_REMAINING // PERIOD_DAYS
         
         # Assemble quote payload dictionary containing immutable state bindings
@@ -489,6 +512,8 @@ class Store:
             "assigned_seats": org["assigned_seats"],
         }
         # Generate deterministic quote fingerprint token to detect state mutations before checkout
+
+        # The "quote token" is a SHA-256 fingerprint of everything the price depends on (epoch, request status and attempts, organisation revision, seat counts). approve() recomputes it inside its own write transaction and refuses the approval if it differs ("stale_quote"). sort_keys makes the JSON, and so the hash, independent of dictionary order. It is an integrity check on server-held state, not a secret or a signature.
         token = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
         
         return {
@@ -528,6 +553,7 @@ class Store:
         if not isinstance(body["quote_token"], str) or len(body["quote_token"]) != 64:
             raise DomainError(400, "invalid_quote", "Review the current cost preview before approving.")
             
+        # Fingerprint of the whole approval request (request id plus quote token plus key). It is stored with the response so a replayed key with different content can be detected.
         payload_hash = hashlib.sha256(json.dumps({"request_id": request_id, **body}, sort_keys=True).encode()).hexdigest()
         
         with self.transaction() as db:
@@ -537,6 +563,8 @@ class Store:
                 raise DomainError(403, "self_approval_forbidden", "An administrator cannot approve their own request.")
                 
             # Check idempotency store to prevent duplicate billing or race conditions on retry
+
+            # Idempotency check first, before anything is recomputed: a repeated request returns the stored answer (with replayed=True) even if the request has since changed state.
             prior = db.execute("SELECT * FROM attempts WHERE actor_id=? AND attempt_key=?", (actor_id, body["idempotency_key"])).fetchone()
             if prior:
                 if prior["payload_hash"] != payload_hash:
@@ -562,6 +590,7 @@ class Store:
             
             # Process payment simulation if immediate proration amount is non-zero
             if quote["immediate_cents"]:
+                # Payments are simulated: the demo state holds the result the reviewer chose ("success" or "failure"); no real payment provider is contacted.
                 succeeded = (payment_result == "success")
                 cur = db.execute(
                     "INSERT INTO payments(org_id,request_id,actor_id,amount_cents,status,created_at) "
@@ -589,6 +618,8 @@ class Store:
                     return result
                     
             # Success path: expand organization seat count, record assignment, and promote membership
+
+            # Success path, all inside one transaction: more seats if needed, the assignment row, membership, request status and the audit events either all happen or (on any error) none do. revision+1 invalidates every older quote of this organisation.
             db.execute("UPDATE organizations SET seat_count=seat_count+?,revision=revision+1 WHERE id=?", (quote["added_seats"], actor["org_id"]))
             db.execute("INSERT INTO assignments(user_id,org_id,assigned_at) VALUES(?,?,?)", (request["user_id"], actor["org_id"], timestamp))
             db.execute("UPDATE users SET membership='member' WHERE id=?", (request["user_id"],))
