@@ -41,8 +41,10 @@ def now() -> str:
 
 
 def require_fields(body, allowed, required=()):
+    # Validate payload type: payload must strictly be a dictionary representation of a JSON object
     if not isinstance(body, dict):
         raise DomainError(400, "invalid_body", "Send a JSON object.")
+    # Compute set differences to enforce strict schema boundaries and detect unexpected parameters
     extra = set(body) - set(allowed)
     missing = set(required) - set(body)
     if extra or missing:
@@ -50,6 +52,7 @@ def require_fields(body, allowed, required=()):
 
 
 def valid_key(key):
+    # Enforce strict idempotency key bounds: alphanumeric plus hyphens/underscores, 8-100 characters
     if not isinstance(key, str) or not 8 <= len(key) <= 100 or not all(c.isalnum() or c in "-_" for c in key):
         raise DomainError(400, "invalid_idempotency_key", "Use an 8–100 character attempt key with letters, numbers, hyphens, or underscores.")
 
@@ -128,6 +131,7 @@ class Store:
 
     @contextmanager
     def transaction(self):
+        # Establish serialized SQLite transaction with immediate write lock to prevent write skew
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
             try:
@@ -252,13 +256,16 @@ class Store:
         if request["status"] not in ("pending", "payment_failed"):
             raise DomainError(409, "request_closed", "This request has already been resolved.")
         org = self._organization(db, actor["org_id"])
+        # Determine whether a new subscription seat must be provisioned or an existing seat reclaimed
         added = 1 if org["available_seats"] <= 0 else 0
+        # Compute exact integer prorated billing cents: avoids floating-point precision hazards
         immediate = added * SEAT_PRICE_CENTS * DAYS_REMAINING // PERIOD_DAYS
         payload = {
             "epoch": db.execute("SELECT value FROM demo_state WHERE key='epoch'").fetchone()[0],
             "request_id": request_id, "request_status": request["status"], "attempt_count": request["attempt_count"],
             "org_id": org["id"], "revision": org["revision"], "seat_count": org["seat_count"], "assigned_seats": org["assigned_seats"],
         }
+        # Generate deterministic quote fingerprint token to detect state mutations before checkout
         token = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
         return {"token": token, "request_id": request_id, "requester_name": request["requester_name"],
                 "sample": True, "currency": "USD", "added_seats": added, "current_seats": org["seat_count"],
@@ -283,6 +290,7 @@ class Store:
             request = self._request(db, actor, request_id, admin=True)
             if actor["id"] == request["user_id"]:
                 raise DomainError(403, "self_approval_forbidden", "An administrator cannot approve their own request.")
+            # Check idempotency store to prevent duplicate billing or race conditions on retry
             prior = db.execute("SELECT * FROM attempts WHERE actor_id=? AND attempt_key=?", (actor_id, body["idempotency_key"])).fetchone()
             if prior:
                 if prior["payload_hash"] != payload_hash:
