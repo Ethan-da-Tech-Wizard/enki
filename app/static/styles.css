@@ -1,11 +1,14 @@
 /* ==============================================================================
    Program: styles.css
    Programmer: Ethan-da-Tech-Wizard
-   Last Modified: November 18, 2026
-   Purpose: Global styling and design system for the Access Lab web interface.
-            Provides responsive layout rules, status indicator badges, modal overlays,
-            dark mode color palettes, and typographic hierarchies.
+   Last Modified: November 19, 2026
+   Purpose: Global stylesheet and responsive design system for Access Lab.
+            Establishes CSS custom properties for cohesive typography, color scales,
+            shadow elevations, and component boundaries. Enforces accessible focus
+            indicators, mobile-first responsive breakpoints, animated state transitions,
+            and high-contrast modal dialog overlays.
    ============================================================================== */
+/* --- 1. Root Design Tokens & CSS Custom Properties --- */
 :root {
   --navy: #182d35;
   --navy-soft: #223a43;

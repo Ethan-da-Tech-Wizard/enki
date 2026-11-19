@@ -1,11 +1,14 @@
 # ==============================================================================
 # Program: test_domain.py
 # Programmer: Ethan-da-Tech-Wizard
-# Last Modified: November 18, 2026
-# Purpose: Unit test suite for domain business rules and SQLite transactions.
-#          Verifies seat reservation math, proration accuracy, concurrent idempotency,
-#          role permissions, and database state transitions.
+# Last Modified: November 19, 2026
+# Purpose: Unit test suite for domain business rules, SQLite transactions, and concurrency.
+#          Verifies atomic seat reservation calculations, integer proration accuracy,
+#          concurrent idempotency guarantees under multi-threaded load, role-based
+#          tenancy permission barriers, and database rollback integrity.
 # ==============================================================================
+"""Hermetic unit tests exercising Access Lab domain state transitions and invariants."""
+
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import tempfile
@@ -17,37 +20,52 @@ from app.domain import DomainError, Store
 
 
 class BusinessTests(unittest.TestCase):
+    """Test suite validating domain persistence, pricing logic, and transaction guarantees."""
+
     def setUp(self):
+        """Create a disposable temporary directory and initialize an isolated Store instance."""
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.db_path = Path(self.temp.name) / "test.sqlite3"
         self.store = Store(self.db_path)
 
     def request(self, actor="maya"):
+        """Helper method submitting an access request for the specified actor."""
         return self.store.create_request(actor, {})["request"]["id"]
 
     def approval(self, request_id, key="approval-001", actor="eli"):
+        """Helper method generating a valid approval payload with live quote token."""
         return {"quote_token": self.store.quote(actor, request_id)["token"], "idempotency_key": key}
 
     def scalar(self, sql):
+        """Helper method executing a SQL query and returning the first scalar column result."""
         with self.store.connection() as db:
             return db.execute(sql).fetchone()[0]
 
     def error(self, code, fn, *args):
+        """Helper asserting that a callable raises DomainError with the expected error code."""
         with self.assertRaises(DomainError) as caught:
             fn(*args)
         self.assertEqual(caught.exception.code, code)
 
     def test_full_seat_journey_is_atomic_and_costed_in_cents(self):
+        """Verify complete end-to-end access request, proration quote, and approval lifecycle.
+        
+        Ensures integer cent calculations ($6.00 proration, $72.00 next period),
+        seat counter increments, audit event recording, and notification dispatch.
+        """
         initial = self.store.workspace("maya")
         self.assertFalse(initial["access"]["enabled"])
         self.assertEqual(initial["organization"]["available_seats"], 0)
+        
         request_id = self.request()
         quote = self.store.quote("eli", request_id)
         self.assertEqual((quote["immediate_cents"], quote["next_period_cents"]), (600, 7200))
         self.assertEqual((quote["seat_price_cents"], quote["days_remaining"], quote["period_days"]), (1200, 15, 30))
+        
         result = self.store.approve("eli", request_id, self.approval(request_id))
         self.assertEqual(result["outcome"], "approved")
+        
         after = self.store.workspace("maya")
         self.assertTrue(after["access"]["enabled"])
         self.assertEqual((after["organization"]["seat_count"], after["organization"]["assigned_seats"]), (6, 6))
@@ -58,24 +76,30 @@ class BusinessTests(unittest.TestCase):
         self.assertEqual(self.scalar("SELECT COUNT(*) FROM notifications WHERE title IN ('You’re ready to collaborate','Workspace access granted')"), 2)
 
     def test_duplicate_request_clicks_and_concurrent_requests_create_one(self):
+        """Assert that concurrent access request submissions from the same user yield exactly one request record."""
         barrier = threading.Barrier(4)
         def request(_):
             barrier.wait()
             return self.store.create_request("maya", {})
+            
         with ThreadPoolExecutor(4) as pool:
             results = list(pool.map(request, range(4)))
+            
         self.assertEqual(len({r["request"]["id"] for r in results}), 1)
         self.assertEqual(sum(r["created"] for r in results), 1)
         self.assertEqual(self.scalar("SELECT COUNT(*) FROM requests"), 1)
         self.assertEqual(self.scalar("SELECT COUNT(*) FROM notifications"), 2)
 
     def test_success_replay_and_different_key_do_not_duplicate(self):
+        """Verify idempotency replay returns matching response without re-executing payment or seat expansion."""
         request_id = self.request()
         body = self.approval(request_id)
         result = self.store.approve("eli", request_id, body)
+        
         replay = self.store.approve("eli", request_id, body)
         self.assertTrue(replay["replayed"])
         self.assertEqual(result, {**replay, "replayed": False})
+        
         later = self.store.approve("eli", request_id, {**body, "idempotency_key": "approval-002"})
         self.assertEqual(later["outcome"], "already_approved")
         self.assertEqual(self.scalar("SELECT COUNT(*) FROM payments"), 1)
@@ -83,56 +107,74 @@ class BusinessTests(unittest.TestCase):
         self.assertEqual(self.scalar("SELECT COUNT(*) FROM notifications"), 4)
 
     def test_concurrent_approvals_same_key_are_replays(self):
+        """Verify that multiple concurrent approval calls using the identical idempotency key execute exactly once."""
         request_id = self.request()
         body = self.approval(request_id)
         barrier = threading.Barrier(6)
+        
         def approve(_):
             barrier.wait()
             return self.store.approve("eli", request_id, body)
+            
         with ThreadPoolExecutor(6) as pool:
             results = list(pool.map(approve, range(6)))
+            
         self.assertEqual(sum(not r["replayed"] for r in results), 1)
         self.assertEqual(self.scalar("SELECT COUNT(*) FROM payments"), 1)
         self.assertEqual(self.scalar("SELECT COUNT(*) FROM events WHERE kind='access_approved'"), 1)
 
     def test_concurrent_different_keys_cannot_double_purchase(self):
+        """Verify that concurrent approval attempts with differing idempotency keys cannot result in double purchases."""
         request_id = self.request()
         body = self.approval(request_id)
         barrier = threading.Barrier(4)
+        
         def approve(i):
             barrier.wait()
             return self.store.approve("eli", request_id, {**body, "idempotency_key": "concurrent-%d" % i})
+            
         with ThreadPoolExecutor(4) as pool:
             results = list(pool.map(approve, range(4)))
+            
         self.assertEqual(sum(r["outcome"] == "approved" for r in results), 1)
         self.assertEqual(self.scalar("SELECT COUNT(*) FROM payments"), 1)
         self.assertEqual(self.scalar("SELECT seat_count FROM organizations WHERE id=1"), 6)
 
     def test_failed_attempt_replay_and_deliberate_retry(self):
+        """Verify state transitions when simulated payment fails: request remains open and retry requires fresh quote."""
         request_id = self.request()
         body = self.approval(request_id)
         self.store.demo_payment({"result": "failure"})
+        
         result = self.store.approve("eli", request_id, body)
         self.assertEqual(result["outcome"], "payment_failed")
         self.assertEqual(result["charged_cents"], 0)
+        
         state = self.store.workspace("maya")
         self.assertFalse(state["access"]["enabled"])
         self.assertEqual(state["organization"]["seat_count"], 5)
         self.assertEqual(state["organization"]["assigned_seats"], 5)
         self.assertEqual(state["requests"][0]["status"], "payment_failed")
         self.assertEqual(self.scalar("SELECT COUNT(*) FROM payments WHERE status='succeeded'"), 0)
+        
+        # Payment setting updated to success; replaying old key returns recorded failed response
         self.store.demo_payment({"result": "success"})
         replay = self.store.approve("eli", request_id, body)
         self.assertTrue(replay["replayed"])
         self.assertEqual(replay["outcome"], "payment_failed")
         self.assertEqual(self.scalar("SELECT COUNT(*) FROM payments"), 1)
+        
+        # Stale quote rejected on retry with new key
         self.error("stale_quote", self.store.approve, "eli", request_id, {**body, "idempotency_key": "retry-old-preview"})
+        
+        # Re-quote and retry succeeds
         result = self.store.approve("eli", request_id, self.approval(request_id, "retry-current-preview"))
         self.assertEqual(result["outcome"], "approved")
         self.assertEqual(self.scalar("SELECT COUNT(*) FROM payments"), 2)
         self.assertEqual(self.scalar("SELECT COUNT(*) FROM payments WHERE status='succeeded'"), 1)
 
     def test_key_payload_mismatch_is_rejected(self):
+        """Assert that reusing an existing idempotency key with differing parameters triggers a 409 conflict."""
         request_id = self.request()
         body = self.approval(request_id)
         self.store.demo_payment({"result": "failure"})
@@ -141,6 +183,7 @@ class BusinessTests(unittest.TestCase):
         self.assertEqual(self.scalar("SELECT COUNT(*) FROM payments"), 1)
 
     def test_spare_seat_assigns_without_payment_even_when_simulator_fails(self):
+        """Verify that when spare seats are available, approval bypasses payment gateway and charges $0.00."""
         self.store.reset({"scenario": "spare", "confirm": "RESET DEMO"})
         self.store.demo_payment({"result": "failure"})
         request_id = self.request()
@@ -152,6 +195,7 @@ class BusinessTests(unittest.TestCase):
         self.assertEqual(self.scalar("SELECT seat_count FROM organizations WHERE id=1"), 6)
 
     def test_stale_preview_requires_explicit_review(self):
+        """Verify that mutations to organization seat capacity invalidate existing quote fingerprints."""
         request_id = self.request()
         body = self.approval(request_id)
         with self.store.transaction() as db:
@@ -162,6 +206,7 @@ class BusinessTests(unittest.TestCase):
         self.assertEqual(self.store.quote("eli", request_id)["immediate_cents"], 0)
 
     def test_reset_invalidates_old_quotes_even_if_request_id_is_reused(self):
+        """Verify that resetting scenario updates epoch UUID, invalidating quotes from prior sessions."""
         request_id = self.request()
         body = self.approval(request_id)
         self.store.reset({"scenario": "full", "confirm": "RESET DEMO"})
@@ -169,6 +214,7 @@ class BusinessTests(unittest.TestCase):
         self.error("stale_quote", self.store.approve, "eli", request_id, body)
 
     def test_mid_transition_failure_rolls_back_purchase_assignment_and_events(self):
+        """Verify atomicity: if an exception interrupts approval processing, all database modifications rollback."""
         request_id = self.request()
         body = self.approval(request_id)
         with patch.object(self.store, "_notify", side_effect=RuntimeError("forced storage failure")):
@@ -181,6 +227,7 @@ class BusinessTests(unittest.TestCase):
         self.assertEqual(self.store.request_detail("maya", request_id)["status"], "pending")
 
     def test_self_approval_and_cross_org_access_are_forbidden(self):
+        """Verify role authorization: developers cannot quote requests, cross-tenant access is blocked, and admins cannot self-approve."""
         request_id = self.request()
         self.error("admin_required", self.store.quote, "maya", request_id)
         self.error("request_not_found", self.store.quote, "robin", request_id)
@@ -193,6 +240,7 @@ class BusinessTests(unittest.TestCase):
         self.error("self_approval_forbidden", self.store.approve, "eli", own_request, {"quote_token": "0" * 64, "idempotency_key": "self-approval"})
 
     def test_developer_data_is_private_and_access_comes_from_membership(self):
+        """Verify data privacy: developer workspaces do not expose billing or member rosters."""
         request_id = self.request()
         maya = self.store.workspace("maya")
         alex = self.store.workspace("alex")
@@ -209,6 +257,7 @@ class BusinessTests(unittest.TestCase):
         self.assertFalse(state["access"]["enabled"])
 
     def test_deny_is_replay_safe_and_developer_can_request_again(self):
+        """Verify that declining an access request is replay-safe and permits future re-application."""
         request_id = self.request()
         self.store.deny("eli", request_id, {})
         self.assertTrue(self.store.deny("eli", request_id, {})["replayed"])
@@ -218,6 +267,7 @@ class BusinessTests(unittest.TestCase):
         self.assertNotEqual(request_id, next_request)
 
     def test_saved_state_survives_store_reopening(self):
+        """Verify that persisted transactions in SQLite remain consistent across application restarts."""
         request_id = self.request()
         self.store.approve("eli", request_id, self.approval(request_id))
         reopened = Store(self.db_path)
